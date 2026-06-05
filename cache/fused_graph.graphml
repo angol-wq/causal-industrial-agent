@@ -5,87 +5,23 @@
 <key id="d2" for="edge" attr.name="mechanism" attr.type="string"/>
 <key id="d1" for="edge" attr.name="confidence" attr.type="double"/>
 <key id="d0" for="edge" attr.name="source" attr.type="string"/>
-<graph edgedefault="directed"><node id="Feed_Conc"/>
-<node id="CW_Inlet_Temp"/>
-<node id="Reactor_Temp"/>
-<node id="Reactor_Press"/>
-<node id="Byproduct_Conc"/>
+<graph edgedefault="directed"><node id="CW_Inlet_Temp"/>
 <node id="Feed_Flow"/>
-<node id="Energy_Index"/>
-<node id="Reaction_Rate"/>
-<node id="CW_Valve"/>
-<node id="Product_Conc"/>
-<node id="HX_Outlet_Temp"/>
+<node id="Reactor_Press"/>
+<node id="Reactor_Temp"/>
 <node id="CW_Flow"/>
-<edge source="Feed_Conc" target="Reaction_Rate">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.665</data>
-  <data key="d2">进料浓度升高→反应速率常数增大</data>
-  <data key="d3">进料浓度直接决定反应速率——操作手册2.1节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
+<node id="Feed_Conc"/>
+<node id="CW_Valve"/>
+<node id="Energy_Index"/>
+<node id="Product_Conc"/>
+<node id="Reaction_Rate"/>
+<node id="HX_Outlet_Temp"/>
+<node id="Byproduct_Conc"/>
 <edge source="CW_Inlet_Temp" target="Reactor_Temp">
   <data key="d0">knowledge_only</data>
   <data key="d1">0.63</data>
   <data key="d2">冷却水入口温度升高→换热温差减小→反应器温度升高</data>
   <data key="d3">当入口温度超过32°C时,换热效率显著下降——操作手册2.2节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reactor_Temp" target="Reaction_Rate">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.665</data>
-  <data key="d2">温度升高→反应速率常数增大(Arrhenius定律)</data>
-  <data key="d3">温度是影响反应速率的关键因素,每升高10°C,反应速率约增加一倍——操作手册2.3节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reactor_Temp" target="Energy_Index">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.56</data>
-  <data key="d2">温度升高→加热/冷却能耗增大</data>
-  <data key="d3">反应器温度(Reactor_Temp)升高→能耗指标(Energy_Index)增大——故障3</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reactor_Temp" target="Reactor_Press">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.595</data>
-  <data key="d2">温度升高→气相膨胀→压力增大</data>
-  <data key="d3">压力受进料流量和反应器温度双重影响——操作手册2.3节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reactor_Temp" target="HX_Outlet_Temp">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.595</data>
-  <data key="d2">反应器温度升高→待冷却物料温度升高→出口温度升高</data>
-  <data key="d3">反应器温度(Reactor_Temp)升高→换热器出口温度(HX_Outlet_Temp)升高——故障3</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reactor_Press" target="Reaction_Rate">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.56</data>
-  <data key="d2">压力升高→气相反应物分压增大→反应速率加快</data>
-  <data key="d3">压力受进料流量和反应器温度双重影响——操作手册2.3节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Byproduct_Conc" target="Reaction_Rate">
-  <data key="d0">data_discovered</data>
-  <data key="d1">0.48</data>
-  <data key="d2"></data>
-  <data key="d3"></data>
-  <data key="d4">0</data>
-  <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
-</edge>
-<edge source="Feed_Flow" target="Product_Conc">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.595</data>
-  <data key="d2">进料流量过大→停留时间缩短→反应不充分→产物浓度下降</data>
-  <data key="d3">缩短物料停留时间,使反应不充分——操作手册2.1节</data>
   <data key="d4">0</data>
   <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
 </edge>
@@ -97,43 +33,75 @@
   <data key="d4">0</data>
   <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
 </edge>
-<edge source="Energy_Index" target="Reactor_Temp">
-  <data key="d0">data_discovered</data>
-  <data key="d1">0.48</data>
-  <data key="d2"></data>
-  <data key="d3"></data>
-  <data key="d4">0</data>
-  <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
-</edge>
-<edge source="Energy_Index" target="Reaction_Rate">
-  <data key="d0">data_discovered</data>
-  <data key="d1">0.48</data>
-  <data key="d2"></data>
-  <data key="d3"></data>
-  <data key="d4">0</data>
-  <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
-</edge>
-<edge source="Reaction_Rate" target="Energy_Index">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.56</data>
-  <data key="d2">反应速率加快→反应放热量增大→冷却能耗增大</data>
-  <data key="d3">反应速率加快→反应放热量增大——操作手册2.4节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reaction_Rate" target="Product_Conc">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.63</data>
-  <data key="d2">反应速率加快→主反应产物生成增多</data>
-  <data key="d3">产物浓度由反应速率和停留时间共同决定——操作手册2.4节</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="Reaction_Rate" target="Byproduct_Conc">
+<edge source="Feed_Flow" target="Product_Conc">
   <data key="d0">knowledge_only</data>
   <data key="d1">0.595</data>
-  <data key="d2">反应速率过快→副反应加剧→副产物增多</data>
-  <data key="d3">反应速率过快时副反应加剧,副产物浓度上升——操作手册2.4节</data>
+  <data key="d2">进料流量过大→停留时间缩短→反应不充分→产物浓度下降</data>
+  <data key="d3">缩短物料停留时间,使反应不充分——操作手册2.1节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reactor_Press" target="Reaction_Rate">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.56</data>
+  <data key="d2">压力升高→气相反应物分压增大→反应速率加快</data>
+  <data key="d3">压力受进料流量和反应器温度双重影响——操作手册2.3节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reactor_Temp" target="Reactor_Press">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.595</data>
+  <data key="d2">温度升高→气相膨胀→压力增大</data>
+  <data key="d3">压力受进料流量和反应器温度双重影响——操作手册2.3节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reactor_Temp" target="Energy_Index">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.56</data>
+  <data key="d2">温度升高→加热/冷却能耗增大</data>
+  <data key="d3">反应器温度(Reactor_Temp)升高→能耗指标(Energy_Index)增大——故障3</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reactor_Temp" target="Reaction_Rate">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.665</data>
+  <data key="d2">温度升高→反应速率常数增大(Arrhenius定律)</data>
+  <data key="d3">温度是影响反应速率的关键因素,每升高10°C,反应速率约增加一倍——操作手册2.3节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reactor_Temp" target="HX_Outlet_Temp">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.595</data>
+  <data key="d2">反应器温度升高→待冷却物料温度升高→出口温度升高</data>
+  <data key="d3">反应器温度(Reactor_Temp)升高→换热器出口温度(HX_Outlet_Temp)升高——故障3</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="CW_Flow" target="HX_Outlet_Temp">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.595</data>
+  <data key="d2">冷却水流量增大→换热充分→出口温度降低</data>
+  <data key="d3">冷却水流量增大→换热充分→出口温度降低——操作手册2.2节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="CW_Flow" target="Reactor_Temp">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.665</data>
+  <data key="d2">冷却水流量增大→换热量增大→反应器温度降低</data>
+  <data key="d3">冷却水流量(CW_Flow)持续下降→反应器温度(Reactor_Temp)上升——故障1</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Feed_Conc" target="Reaction_Rate">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.665</data>
+  <data key="d2">进料浓度升高→反应速率常数增大</data>
+  <data key="d3">进料浓度直接决定反应速率——操作手册2.1节</data>
   <data key="d4">0</data>
   <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
 </edge>
@@ -144,6 +112,22 @@
   <data key="d3">阀门开度与冷却水流量呈正比关系——操作手册2.2节</data>
   <data key="d4">0</data>
   <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Energy_Index" target="Reaction_Rate">
+  <data key="d0">data_discovered</data>
+  <data key="d1">0.48</data>
+  <data key="d2"></data>
+  <data key="d3"></data>
+  <data key="d4">0</data>
+  <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
+</edge>
+<edge source="Energy_Index" target="Reactor_Temp">
+  <data key="d0">data_discovered</data>
+  <data key="d1">0.48</data>
+  <data key="d2"></data>
+  <data key="d3"></data>
+  <data key="d4">0</data>
+  <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
 </edge>
 <edge source="Product_Conc" target="Feed_Flow">
   <data key="d0">data_discovered</data>
@@ -161,6 +145,30 @@
   <data key="d4">0</data>
   <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
 </edge>
+<edge source="Reaction_Rate" target="Product_Conc">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.63</data>
+  <data key="d2">反应速率加快→主反应产物生成增多</data>
+  <data key="d3">产物浓度由反应速率和停留时间共同决定——操作手册2.4节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reaction_Rate" target="Byproduct_Conc">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.595</data>
+  <data key="d2">反应速率过快→副反应加剧→副产物增多</data>
+  <data key="d3">反应速率过快时副反应加剧,副产物浓度上升——操作手册2.4节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
+<edge source="Reaction_Rate" target="Energy_Index">
+  <data key="d0">knowledge_only</data>
+  <data key="d1">0.56</data>
+  <data key="d2">反应速率加快→反应放热量增大→冷却能耗增大</data>
+  <data key="d3">反应速率加快→反应放热量增大——操作手册2.4节</data>
+  <data key="d4">0</data>
+  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+</edge>
 <edge source="HX_Outlet_Temp" target="CW_Inlet_Temp">
   <data key="d0">data_discovered</data>
   <data key="d1">0.48</data>
@@ -169,20 +177,12 @@
   <data key="d4">0</data>
   <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
 </edge>
-<edge source="CW_Flow" target="HX_Outlet_Temp">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.595</data>
-  <data key="d2">冷却水流量增大→换热充分→出口温度降低</data>
-  <data key="d3">冷却水流量增大→换热充分→出口温度降低——操作手册2.2节</data>
+<edge source="Byproduct_Conc" target="Reaction_Rate">
+  <data key="d0">data_discovered</data>
+  <data key="d1">0.48</data>
+  <data key="d2"></data>
+  <data key="d3"></data>
   <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
-</edge>
-<edge source="CW_Flow" target="Reactor_Temp">
-  <data key="d0">knowledge_only</data>
-  <data key="d1">0.665</data>
-  <data key="d2">冷却水流量增大→换热量增大→反应器温度降低</data>
-  <data key="d3">冷却水流量(CW_Flow)持续下降→反应器温度(Reactor_Temp)上升——故障1</data>
-  <data key="d4">0</data>
-  <data key="d5">数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖</data>
+  <data key="d5">数据驱动新发现 — 建议领域专家审核此因果假设</data>
 </edge>
 </graph></graphml>
