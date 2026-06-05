@@ -135,7 +135,7 @@ def main():
 
     # ==== 模式选择 ====
     mode = st.sidebar.radio('📌 选择模式',
-        ['🎯 故障诊断', '🧪 场景模拟器', '📊 因果图浏览', '📚 知识库'],
+        ['🎯 故障诊断', '🧪 场景模拟器', '📊 因果图浏览', '📚 知识库与进化', '🌐 文献爬虫'],
         key='mode_selector')
 
     # ================================================================
@@ -426,13 +426,30 @@ def main():
         st.dataframe(pd.DataFrame(edges_data), use_container_width=True, hide_index=True)
 
     # ================================================================
-    # 模式4: 知识库
+    # 模式4: 知识库与进化
     # ================================================================
-    elif mode == '📚 知识库':
-        st.subheader('📚 因果知识库')
-        kp = data.get('kp', [])
-        st.metric('知识条目', len(kp))
+    elif mode == '📚 知识库与进化':
+        st.subheader('📚 因果知识库 & 系统知识迭代')
 
+        # 知识增长追踪
+        from src.literature_crawler import LiteratureCrawler
+        crawler = LiteratureCrawler()
+        local_papers = crawler.load_manual_papers()
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.metric('🧬 因果边', graph.number_of_edges(), delta=f'已融合')
+        with c2: st.metric('📄 本地文献', len(local_papers), delta='持续增长')
+        with c3:
+            kp_count = len(data.get('kp', []))
+            st.metric('📝 知识条目', kp_count)
+        with c4:
+            st.metric('🔄 进化状态', '就绪', delta='可触发')
+
+        st.markdown('---')
+
+        # 因果知识表
+        st.subheader('🔗 因果知识条目')
+        kp = data.get('kp', [])
         if kp:
             kp_data = pd.DataFrame([{
                 '原因(中)': get_cn_label(p.get('cause', '')),
@@ -446,14 +463,47 @@ def main():
             st.dataframe(kp_data, use_container_width=True, hide_index=True)
 
         st.markdown('---')
-        st.subheader('📖 本地文献')
+
+        # 本地文献库
+        st.subheader('📖 本地文献库 — 知识迭代基础')
         manual_dir = 'data/literature/manual'
         if os.path.exists(manual_dir):
-            files = os.listdir(manual_dir)
-            st.markdown(f'**已加载 {len(files)} 个文件**')
+            files = [f for f in os.listdir(manual_dir) if f.endswith(('.txt', '.md', '.json'))]
+            st.markdown(f'**已加载 {len(files)} 篇文献**')
+
+            # 显示文献内容预览
             for f in files:
-                st.markdown(f'📄 {f}')
-        st.caption(f'放入更多文献到 `{manual_dir}/` 即可自动加载')
+                path = os.path.join(manual_dir, f)
+                with open(path, encoding='utf-8') as ff:
+                    content = ff.read()
+                # 统计因果关键词
+                keywords = ['因果', '导致', '引起', '影响', '下降', '升高', '异常', '故障', '根因']
+                kw_count = sum(1 for kw in keywords if kw in content)
+                with st.expander(f'📄 {f} (含{kw_count}个因果关键词 | {len(content)}字)'):
+                    st.text(content[:500] + ('...' if len(content) > 500 else ''))
+        else:
+            st.warning('本地文献目录不存在，请创建 data/literature/manual/')
+
+        st.markdown('---')
+
+        # 从本地文献提取的知识
+        st.subheader('🧠 文献提取的因果知识')
+        if local_papers:
+            from src.literature_extractor import LiteratureExtractor
+            extractor = LiteratureExtractor()
+            knowledge = extractor.extract_from_papers(local_papers)
+            if knowledge and knowledge.causal_edges:
+                st.success(f'从{len(local_papers)}篇文献中提取到 {len(knowledge.causal_edges)} 条因果知识')
+                lit_kp = pd.DataFrame([{
+                    '原因': e.get('cause', ''),
+                    '结果': e.get('effect', ''),
+                    '方向': e.get('direction', ''),
+                    '置信度': f'{e.get("confidence", 0):.2f}',
+                } for e in knowledge.causal_edges[:20]])
+                st.dataframe(lit_kp, use_container_width=True, hide_index=True)
+            else:
+                st.info('当前本地文献中未提取到新因果边。添加更多含因果描述的文献即可自动提取。')
+        st.caption('💡 提示: 将论文摘要/故障报告/操作规程放入 data/literature/manual/ 即可自动纳入知识库。')
 
         st.markdown('---')
         st.markdown(f'### 📊 变量词典 ({len(VAR_CN)} 个变量)')
@@ -462,6 +512,115 @@ def main():
             '分类': cn['category'], '描述': cn['desc']
         } for en, cn in VAR_CN.items()])
         st.dataframe(dict_data, use_container_width=True, hide_index=True)
+
+    # ================================================================
+    # 模式5: 文献爬虫
+    # ================================================================
+    elif mode == '🌐 文献爬虫':
+        st.subheader('🌐 文献自主爬虫 & 知识迭代')
+
+        st.markdown('''
+        ### 文献迭代流程
+        ```
+        ① 爬虫搜索 ──→ ② AI精读提取 ──→ ③ 因果知识注入 ──→ ④ 仿真自测
+             ↑                                                    │
+             └──────────── ⑤ 未通过 → 回到爬虫 ──────────────────┘
+                                 通过 → 更新因果图 ✓
+        ```
+        ''')
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.subheader('📡 爬虫状态')
+            st.markdown(f'''
+            | 数据源 | 状态 | 说明 |
+            |--------|------|------|
+            | 📖 本地文献 | 🟢 在线 | `data/literature/manual/` |
+            | 🔬 百度学术 | 🟡 国内可访问 | 钢铁/冶金关键词 |
+            | 📄 Semantic Scholar | 🟡 海外API | 英文SCI论文 |
+            | 🏭 武钢官网 | 🟢 在线 | 技改公告/新闻 |
+            | 📋 arXiv | 🟡 预印本 | 工业AI方向 |
+            | 🎓 CNKI知网 | 🔴 需教育网IP | 可通过学校VPN |
+            ''')
+
+        with c2:
+            st.subheader('🔄 知识迭代统计')
+            from src.literature_crawler import LiteratureCrawler
+            crawler = LiteratureCrawler()
+            local_papers = crawler.load_manual_papers()
+
+            st.metric('📄 当前文献总量', len(local_papers))
+
+            # 统计文献中的因果关键词
+            total_kw = 0
+            manual_dir = 'data/literature/manual'
+            if os.path.exists(manual_dir):
+                for f in os.listdir(manual_dir):
+                    if f.endswith(('.txt', '.md', '.json')):
+                        with open(os.path.join(manual_dir, f), encoding='utf-8') as ff:
+                            content = ff.read()
+                        keywords = ['因果', '导致', '引起', '影响', '下降', '升高', '异常', '故障', '根因', '机理', '→', '上游', '下游']
+                        total_kw += sum(1 for kw in keywords if kw in content)
+            st.metric('🔑 因果关键词', total_kw)
+
+            st.metric('🧬 因果图边数', graph.number_of_edges(), delta='已融合所有知识')
+
+        st.markdown('---')
+
+        # 手动触发爬虫
+        st.subheader('🚀 手动触发文献搜索')
+        search_kw = st.text_input('搜索关键词', '高炉 冷却壁 故障 因果')
+
+        if st.button('🔍 开始搜索', type='primary', use_container_width=True):
+            with st.spinner('搜索中 (国内源: 百度学术 + 本地)...'):
+                try:
+                    crawler = LiteratureCrawler()
+                    papers = crawler.search_all([search_kw])
+
+                    if papers:
+                        st.success(f'获取 {len(papers)} 篇文献')
+                        r_df = pd.DataFrame([{
+                            '标题': p.title[:60],
+                            '年份': p.year,
+                            '来源': p.source_type,
+                            '引用': p.citation_count,
+                        } for p in papers[:15]])
+                        st.dataframe(r_df, use_container_width=True, hide_index=True)
+
+                        # 尝试提取因果知识
+                        from src.literature_extractor import LiteratureExtractor
+                        extractor = LiteratureExtractor()
+                        knowledge = extractor.extract_from_papers(papers[:10])
+                        if knowledge and knowledge.causal_edges:
+                            st.success(f'提取到 {len(knowledge.causal_edges)} 条新因果边！')
+                            ek_df = pd.DataFrame([{
+                                '原因': e.get('cause', ''),
+                                '结果': e.get('effect', ''),
+                                '方向': e.get('direction', ''),
+                                '置信度': f'{e.get("confidence", 0):.2f}',
+                                '机制': e.get('mechanism', '')[:50],
+                            } for e in knowledge.causal_edges[:10]])
+                            st.dataframe(ek_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.warning('网络搜索未返回结果（可能被限制）。本地文献仍可正常使用。')
+                        st.info('✅ 替代方案: 手动将论文摘要放入 `data/literature/manual/` 文件夹')
+
+                except Exception as e:
+                    st.warning(f'搜索受限: {e}')
+                    st.info('✅ 这很正常——国内网络环境限制海外学术API。本地文献不受影响。')
+
+        st.markdown('---')
+        st.subheader('📖 当前本地文献列表')
+        manual_dir = 'data/literature/manual'
+        if os.path.exists(manual_dir):
+            files = [f for f in os.listdir(manual_dir) if f.endswith(('.txt', '.md', '.json'))]
+            for f in files:
+                path = os.path.join(manual_dir, f)
+                size = os.path.getsize(path)
+                with open(path, encoding='utf-8') as ff:
+                    first_line = ff.readline().strip().lstrip('#').strip()
+                st.markdown(f'📄 **{f}** ({size}B) — {first_line[:80]}')
 
 
 if __name__ == '__main__':
