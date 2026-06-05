@@ -1,0 +1,23 @@
+{
+  "pipeline": "因果增强工业智能体",
+  "ground_truth_edges": 17,
+  "knowledge_edges": 15,
+  "data_graph_edges": 6,
+  "fused_graph_edges": 21,
+  "fusion_stats": {
+    "total_edges": 21,
+    "dual_verified": 0,
+    "knowledge_only": 15,
+    "data_discovered": 6,
+    "avg_confidence": 0.5754761904761905,
+    "high_confidence_edges": 0,
+    "medium_confidence_edges": 15,
+    "low_confidence_edges": 6
+  },
+  "tested_faults": [
+    "FAULT_COOLING_VALVE_STUCK",
+    "FAULT_FEED_CONC_DROP",
+    "FAULT_CW_INLET_TEMP_HIGH",
+    "FAULT_FEED_FLOW_SURGE"
+  ]
+}

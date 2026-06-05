@@ -1,0 +1,154 @@
+{
+  "variables": [
+    "Feed_Flow",
+    "Feed_Conc",
+    "CW_Inlet_Temp",
+    "CW_Valve",
+    "Reactor_Temp",
+    "Reactor_Press",
+    "CW_Flow",
+    "Reaction_Rate",
+    "Product_Conc",
+    "Byproduct_Conc",
+    "HX_Outlet_Temp",
+    "Energy_Index"
+  ],
+  "causal_edges": [
+    {
+      "cause": "Feed_Flow",
+      "effect": "Reactor_Press",
+      "coefficient": 0.15,
+      "time_lag": 0,
+      "mechanism": "进料流速增大 → 反应器内物料累积 → 压力升高",
+      "direction": "positive"
+    },
+    {
+      "cause": "Feed_Conc",
+      "effect": "Reaction_Rate",
+      "coefficient": 0.42,
+      "time_lag": 1,
+      "mechanism": "进料浓度升高 → 反应物浓度梯度增大 → 反应速率加快",
+      "direction": "positive"
+    },
+    {
+      "cause": "Feed_Flow",
+      "effect": "Product_Conc",
+      "coefficient": -0.08,
+      "time_lag": 3,
+      "mechanism": "进料流量过大 → 停留时间缩短 → 反应不充分 → 产物浓度下降",
+      "direction": "negative"
+    },
+    {
+      "cause": "CW_Valve",
+      "effect": "CW_Flow",
+      "coefficient": 0.55,
+      "time_lag": 0,
+      "mechanism": "阀门开度增大 → 冷却水流量增大",
+      "direction": "positive"
+    },
+    {
+      "cause": "CW_Inlet_Temp",
+      "effect": "Reactor_Temp",
+      "coefficient": 0.28,
+      "time_lag": 1,
+      "mechanism": "冷却水入口温度升高 → 换热温差减小 → 反应器温度升高",
+      "direction": "positive"
+    },
+    {
+      "cause": "CW_Flow",
+      "effect": "Reactor_Temp",
+      "coefficient": -0.35,
+      "time_lag": 1,
+      "mechanism": "冷却水流量增大 → 换热量增大 → 反应器温度降低",
+      "direction": "negative"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "Reaction_Rate",
+      "coefficient": 0.5,
+      "time_lag": 0,
+      "mechanism": "温度升高 → 反应速率常数增大(Arrhenius) → 反应速率加快",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "Reactor_Press",
+      "coefficient": 0.12,
+      "time_lag": 0,
+      "mechanism": "温度升高 → 气相膨胀 → 压力增大",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "Energy_Index",
+      "coefficient": 0.4,
+      "time_lag": 1,
+      "mechanism": "温度升高 → 加热能耗增大",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reactor_Press",
+      "effect": "Reaction_Rate",
+      "coefficient": 0.18,
+      "time_lag": 0,
+      "mechanism": "压力升高 → 气相反应物分压增大 → 反应速率加快",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reaction_Rate",
+      "effect": "Product_Conc",
+      "coefficient": 0.6,
+      "time_lag": 1,
+      "mechanism": "反应速率加快 → 主反应产物生成增多",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reaction_Rate",
+      "effect": "Byproduct_Conc",
+      "coefficient": 0.22,
+      "time_lag": 2,
+      "mechanism": "反应速率过快 → 副反应加剧 → 副产物增多",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reaction_Rate",
+      "effect": "Energy_Index",
+      "coefficient": 0.3,
+      "time_lag": 0,
+      "mechanism": "反应速率加快 → 放热量增大 → 冷却能耗增大",
+      "direction": "positive"
+    },
+    {
+      "cause": "CW_Flow",
+      "effect": "HX_Outlet_Temp",
+      "coefficient": -0.45,
+      "time_lag": 1,
+      "mechanism": "冷却水流量增大 → 换热充分 → 出口温度降低",
+      "direction": "negative"
+    },
+    {
+      "cause": "CW_Inlet_Temp",
+      "effect": "HX_Outlet_Temp",
+      "coefficient": 0.55,
+      "time_lag": 0,
+      "mechanism": "入口温度升高 → 换热基准温度升高 → 出口温度升高",
+      "direction": "positive"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "HX_Outlet_Temp",
+      "coefficient": 0.65,
+      "time_lag": 0,
+      "mechanism": "反应器温度升高 → 待冷却物料温度升高 → 出口温度升高",
+      "direction": "positive"
+    },
+    {
+      "cause": "Product_Conc",
+      "effect": "Energy_Index",
+      "coefficient": -0.1,
+      "time_lag": 2,
+      "mechanism": "产物浓度达标 → 反应趋于稳态 → 能耗趋于稳定",
+      "direction": "negative"
+    }
+  ]
+}

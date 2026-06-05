@@ -1,0 +1,154 @@
+{
+  "causal_pairs": [
+    {
+      "cause": "Feed_Flow",
+      "effect": "Reactor_Press",
+      "direction": "positive",
+      "mechanism": "进料流量增大→反应器内物料累积→压力升高",
+      "quantitative_relation": "",
+      "time_lag": "0",
+      "confidence": 0.9,
+      "evidence": "异常升高会导致反应器内压力上升——操作手册2.1节"
+    },
+    {
+      "cause": "Feed_Conc",
+      "effect": "Reaction_Rate",
+      "direction": "positive",
+      "mechanism": "进料浓度升高→反应速率常数增大",
+      "quantitative_relation": "浓度每下降0.1mol/L,反应速率降低约17%",
+      "time_lag": "1",
+      "confidence": 0.95,
+      "evidence": "进料浓度直接决定反应速率——操作手册2.1节"
+    },
+    {
+      "cause": "Feed_Flow",
+      "effect": "Product_Conc",
+      "direction": "negative",
+      "mechanism": "进料流量过大→停留时间缩短→反应不充分→产物浓度下降",
+      "quantitative_relation": "",
+      "time_lag": "3",
+      "confidence": 0.85,
+      "evidence": "缩短物料停留时间,使反应不充分——操作手册2.1节"
+    },
+    {
+      "cause": "CW_Valve",
+      "effect": "CW_Flow",
+      "direction": "positive",
+      "mechanism": "阀门开度与冷却水流量呈正比",
+      "quantitative_relation": "",
+      "time_lag": "0",
+      "confidence": 0.95,
+      "evidence": "阀门开度与冷却水流量呈正比关系——操作手册2.2节"
+    },
+    {
+      "cause": "CW_Inlet_Temp",
+      "effect": "Reactor_Temp",
+      "direction": "positive",
+      "mechanism": "冷却水入口温度升高→换热温差减小→反应器温度升高",
+      "quantitative_relation": "入口温度超过32°C时,换热效率显著下降",
+      "time_lag": "1",
+      "confidence": 0.9,
+      "evidence": "当入口温度超过32°C时,换热效率显著下降——操作手册2.2节"
+    },
+    {
+      "cause": "CW_Flow",
+      "effect": "Reactor_Temp",
+      "direction": "negative",
+      "mechanism": "冷却水流量增大→换热量增大→反应器温度降低",
+      "quantitative_relation": "",
+      "time_lag": "1",
+      "confidence": 0.95,
+      "evidence": "冷却水流量(CW_Flow)持续下降→反应器温度(Reactor_Temp)上升——故障1"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "Reaction_Rate",
+      "direction": "positive",
+      "mechanism": "温度升高→反应速率常数增大(Arrhenius定律)",
+      "quantitative_relation": "每升高10°C,反应速率约增加一倍",
+      "time_lag": "0",
+      "confidence": 0.95,
+      "evidence": "温度是影响反应速率的关键因素,每升高10°C,反应速率约增加一倍——操作手册2.3节"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "Reactor_Press",
+      "direction": "positive",
+      "mechanism": "温度升高→气相膨胀→压力增大",
+      "quantitative_relation": "",
+      "time_lag": "0",
+      "confidence": 0.85,
+      "evidence": "压力受进料流量和反应器温度双重影响——操作手册2.3节"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "Energy_Index",
+      "direction": "positive",
+      "mechanism": "温度升高→加热/冷却能耗增大",
+      "quantitative_relation": "",
+      "time_lag": "1",
+      "confidence": 0.8,
+      "evidence": "反应器温度(Reactor_Temp)升高→能耗指标(Energy_Index)增大——故障3"
+    },
+    {
+      "cause": "Reactor_Temp",
+      "effect": "HX_Outlet_Temp",
+      "direction": "positive",
+      "mechanism": "反应器温度升高→待冷却物料温度升高→出口温度升高",
+      "quantitative_relation": "",
+      "time_lag": "0",
+      "confidence": 0.85,
+      "evidence": "反应器温度(Reactor_Temp)升高→换热器出口温度(HX_Outlet_Temp)升高——故障3"
+    },
+    {
+      "cause": "Reactor_Press",
+      "effect": "Reaction_Rate",
+      "direction": "positive",
+      "mechanism": "压力升高→气相反应物分压增大→反应速率加快",
+      "quantitative_relation": "",
+      "time_lag": "0",
+      "confidence": 0.8,
+      "evidence": "压力受进料流量和反应器温度双重影响——操作手册2.3节"
+    },
+    {
+      "cause": "Reaction_Rate",
+      "effect": "Product_Conc",
+      "direction": "positive",
+      "mechanism": "反应速率加快→主反应产物生成增多",
+      "quantitative_relation": "",
+      "time_lag": "1",
+      "confidence": 0.9,
+      "evidence": "产物浓度由反应速率和停留时间共同决定——操作手册2.4节"
+    },
+    {
+      "cause": "Reaction_Rate",
+      "effect": "Byproduct_Conc",
+      "direction": "positive",
+      "mechanism": "反应速率过快→副反应加剧→副产物增多",
+      "quantitative_relation": "",
+      "time_lag": "2",
+      "confidence": 0.85,
+      "evidence": "反应速率过快时副反应加剧,副产物浓度上升——操作手册2.4节"
+    },
+    {
+      "cause": "CW_Flow",
+      "effect": "HX_Outlet_Temp",
+      "direction": "negative",
+      "mechanism": "冷却水流量增大→换热充分→出口温度降低",
+      "quantitative_relation": "",
+      "time_lag": "1",
+      "confidence": 0.85,
+      "evidence": "冷却水流量增大→换热充分→出口温度降低——操作手册2.2节"
+    },
+    {
+      "cause": "Reaction_Rate",
+      "effect": "Energy_Index",
+      "direction": "positive",
+      "mechanism": "反应速率加快→反应放热量增大→冷却能耗增大",
+      "quantitative_relation": "",
+      "time_lag": "0",
+      "confidence": 0.8,
+      "evidence": "反应速率加快→反应放热量增大——操作手册2.4节"
+    }
+  ]
+}

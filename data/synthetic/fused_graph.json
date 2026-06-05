@@ -1,0 +1,217 @@
+{
+  "nodes": [
+    "Feed_Conc",
+    "Product_Conc",
+    "CW_Valve",
+    "Energy_Index",
+    "CW_Flow",
+    "Feed_Flow",
+    "Reactor_Press",
+    "Byproduct_Conc",
+    "CW_Inlet_Temp",
+    "Reactor_Temp",
+    "HX_Outlet_Temp",
+    "Reaction_Rate"
+  ],
+  "edges": [
+    {
+      "source": "Reactor_Temp",
+      "target": "HX_Outlet_Temp",
+      "source_type": "knowledge_only",
+      "confidence": 0.595,
+      "mechanism": "反应器温度升高→待冷却物料温度升高→出口温度升高",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "CW_Flow",
+      "target": "Reactor_Temp",
+      "source_type": "knowledge_only",
+      "confidence": 0.665,
+      "mechanism": "冷却水流量增大→换热量增大→反应器温度降低",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Reactor_Temp",
+      "target": "Energy_Index",
+      "source_type": "knowledge_only",
+      "confidence": 0.56,
+      "mechanism": "温度升高→加热/冷却能耗增大",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Product_Conc",
+      "target": "Reaction_Rate",
+      "source_type": "data_discovered",
+      "confidence": 0.48,
+      "mechanism": "",
+      "time_lag": 0,
+      "note": "数据驱动新发现 — 建议领域专家审核此因果假设"
+    },
+    {
+      "source": "Feed_Conc",
+      "target": "Reaction_Rate",
+      "source_type": "knowledge_only",
+      "confidence": 0.665,
+      "mechanism": "进料浓度升高→反应速率常数增大",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Feed_Flow",
+      "target": "Product_Conc",
+      "source_type": "knowledge_only",
+      "confidence": 0.595,
+      "mechanism": "进料流量过大→停留时间缩短→反应不充分→产物浓度下降",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Reaction_Rate",
+      "target": "Byproduct_Conc",
+      "source_type": "knowledge_only",
+      "confidence": 0.595,
+      "mechanism": "反应速率过快→副反应加剧→副产物增多",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "HX_Outlet_Temp",
+      "target": "CW_Inlet_Temp",
+      "source_type": "data_discovered",
+      "confidence": 0.48,
+      "mechanism": "",
+      "time_lag": 0,
+      "note": "数据驱动新发现 — 建议领域专家审核此因果假设"
+    },
+    {
+      "source": "CW_Valve",
+      "target": "CW_Flow",
+      "source_type": "knowledge_only",
+      "confidence": 0.665,
+      "mechanism": "阀门开度与冷却水流量呈正比",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Reactor_Press",
+      "target": "Reaction_Rate",
+      "source_type": "knowledge_only",
+      "confidence": 0.56,
+      "mechanism": "压力升高→气相反应物分压增大→反应速率加快",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Product_Conc",
+      "target": "Feed_Flow",
+      "source_type": "data_discovered",
+      "confidence": 0.48,
+      "mechanism": "",
+      "time_lag": 0,
+      "note": "数据驱动新发现 — 建议领域专家审核此因果假设"
+    },
+    {
+      "source": "Energy_Index",
+      "target": "Reactor_Temp",
+      "source_type": "data_discovered",
+      "confidence": 0.48,
+      "mechanism": "",
+      "time_lag": 0,
+      "note": "数据驱动新发现 — 建议领域专家审核此因果假设"
+    },
+    {
+      "source": "Reactor_Temp",
+      "target": "Reactor_Press",
+      "source_type": "knowledge_only",
+      "confidence": 0.595,
+      "mechanism": "温度升高→气相膨胀→压力增大",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "CW_Flow",
+      "target": "HX_Outlet_Temp",
+      "source_type": "knowledge_only",
+      "confidence": 0.595,
+      "mechanism": "冷却水流量增大→换热充分→出口温度降低",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "CW_Inlet_Temp",
+      "target": "Reactor_Temp",
+      "source_type": "knowledge_only",
+      "confidence": 0.63,
+      "mechanism": "冷却水入口温度升高→换热温差减小→反应器温度升高",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Reaction_Rate",
+      "target": "Energy_Index",
+      "source_type": "knowledge_only",
+      "confidence": 0.56,
+      "mechanism": "反应速率加快→反应放热量增大→冷却能耗增大",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Reactor_Temp",
+      "target": "Reaction_Rate",
+      "source_type": "knowledge_only",
+      "confidence": 0.665,
+      "mechanism": "温度升高→反应速率常数增大(Arrhenius定律)",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Reaction_Rate",
+      "target": "Product_Conc",
+      "source_type": "knowledge_only",
+      "confidence": 0.63,
+      "mechanism": "反应速率加快→主反应产物生成增多",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Feed_Flow",
+      "target": "Reactor_Press",
+      "source_type": "knowledge_only",
+      "confidence": 0.63,
+      "mechanism": "进料流量增大→反应器内物料累积→压力升高",
+      "time_lag": 0,
+      "note": "数据通道未检出 — 可能原因: ①因果效应慢于数据窗口 ②非线性关系 ③数据不足 ④噪声掩盖"
+    },
+    {
+      "source": "Energy_Index",
+      "target": "Reaction_Rate",
+      "source_type": "data_discovered",
+      "confidence": 0.48,
+      "mechanism": "",
+      "time_lag": 0,
+      "note": "数据驱动新发现 — 建议领域专家审核此因果假设"
+    },
+    {
+      "source": "Byproduct_Conc",
+      "target": "Reaction_Rate",
+      "source_type": "data_discovered",
+      "confidence": 0.48,
+      "mechanism": "",
+      "time_lag": 0,
+      "note": "数据驱动新发现 — 建议领域专家审核此因果假设"
+    }
+  ],
+  "stats": {
+    "total_edges": 21,
+    "dual_verified": 0,
+    "knowledge_only": 15,
+    "data_discovered": 6,
+    "avg_confidence": 0.5754761904761905,
+    "high_confidence_edges": 0,
+    "medium_confidence_edges": 15,
+    "low_confidence_edges": 6
+  }
+}
