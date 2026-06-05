@@ -211,9 +211,10 @@ class LiteratureExtractor:
 
         # 规则2: 提取数值参数
         param_patterns = [
-            (r'换热系数[：:=]?\s*([\d.]+)\s*[Ww]/([m㎡]', '换热系数'),
+            (r'换热系数[：:=]?\s*([\d.]+)', '换热系数'),
             (r'导热率[：:=]?\s*([\d.]+)', '导热率'),
             (r'侵蚀速率[：:=]?\s*([\d.]+)', '侵蚀速率'),
+            (r'传热系数[：:=]?\s*([\d.]+)', '传热系数'),
         ]
         for pattern, param_name in param_patterns:
             match = re.search(pattern, abstract)
