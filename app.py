@@ -1,128 +1,78 @@
 """
-因果增强工业智能体 — Streamlit 演示界面
-运行: streamlit run app.py
+因果增强工业智能体 V2 — Streamlit 可视化界面
+新增: 31种故障 | 自主文献进化 | 进化状态面板
 """
-
 import streamlit as st
 import numpy as np
 import pandas as pd
 import networkx as nx
 import plotly.graph_objects as go
 import plotly.express as px
-import sys, os, json
+import sys, os, json, time
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.synthetic_data_generator import (
-    SyntheticProcessSimulator, CAUSAL_GRAPH_TRUTH, VAR_NAMES,
-    FAULT_MODES, ROOT_VARS, INTERMEDIATE_VARS, OUTPUT_VARS,
-)
+from src.synthetic_data_generator import (VAR_NAMES, ROOT_VARS, INTERMEDIATE_VARS, OUTPUT_VARS, CAUSAL_GRAPH_TRUTH)
 from src.root_cause_analysis import RootCauseAnalyzer
 from src.counterfactual import CounterfactualEngine
+from src.unified_fault_registry import UnifiedFaultRegistry
+from src.llm_causal_extract import extract_from_synthetic_doc, LLMCausalExtractor
+from src.agent_v2 import CausalAgentV2
 
-st.set_page_config(
-    page_title='因果增强工业智能体',
-    page_icon='🏭',
-    layout='wide',
-    initial_sidebar_state='expanded',
-)
+st.set_page_config(page_title='因果增强工业智能体 V2', page_icon='🧬', layout='wide',
+                   initial_sidebar_state='expanded')
 
 # ============================================================
-# 预计算缓存加载（秒开，不做实时PCMCI+）
+# 初始化
 # ============================================================
 @st.cache_resource
+def init_system():
+    """初始化: 统一故障注册中心 + 因果图 + Agent V2"""
+    registry = UnifiedFaultRegistry()
+    # 初始因果图
+    os.makedirs('data/synthetic', exist_ok=True)
+    from src.synthetic_data_generator import generate_process_documentation
+    generate_process_documentation('data/synthetic')
+    pairs = extract_from_synthetic_doc('data/synthetic/process_documentation.txt', VAR_NAMES)
+    kg = LLMCausalExtractor.pairs_to_graph(pairs, VAR_NAMES)
+    # Agent V2
+    agent = CausalAgentV2()
+    agent.causal_graph = kg
+    return registry, kg, agent
+
+
+@st.cache_resource
 def load_cache():
-    """加载预计算的所有数据"""
-    data = {}
+    """加载预计算缓存"""
     cache_dir = os.path.join(os.path.dirname(__file__), 'cache')
-
-    # 如果没有缓存，运行预计算
-    if not os.path.exists(os.path.join(cache_dir, 'fused_graph.graphml')):
-        st.info('正在生成缓存数据（仅首次需要，约30秒）...')
-        import subprocess
-        subprocess.run([sys.executable, 'precompute.py'],
-                       cwd=os.path.dirname(__file__))
-        st.success('缓存生成完成！刷新页面。')
+    if not os.path.exists(os.path.join(cache_dir, 'normal_range.json')):
+        st.warning('缓存数据不存在，请先运行: python precompute.py')
         st.stop()
-
-    # 加载融合因果图
+    data = {}
     data['fused_graph'] = nx.read_graphml(os.path.join(cache_dir, 'fused_graph.graphml'))
-    data['data_graph'] = nx.read_graphml(os.path.join(cache_dir, 'data_graph.graphml'))
-
-    # 加载知识对 → 知识图
-    with open(os.path.join(cache_dir, 'knowledge_pairs.json')) as f:
-        kps = json.load(f)
-    kg = nx.DiGraph()
-    for v in VAR_NAMES:
-        kg.add_node(v)
-    for kp in kps:
-        kg.add_edge(kp['cause'], kp['effect'], confidence=kp.get('confidence', 0.5),
-                     mechanism=kp.get('mechanism', ''))
-    data['knowledge_graph'] = kg
-
-    # Ground truth
-    truth = nx.DiGraph()
-    for e in CAUSAL_GRAPH_TRUTH:
-        truth.add_edge(e.cause, e.effect)
-    data['truth_graph'] = truth
-
-    # 融合统计
-    with open(os.path.join(cache_dir, 'fusion_dict.json')) as f:
-        fusion = json.load(f)
-    data['fusion'] = type('Fusion', (), {'fusion_stats': fusion['stats'], 'to_dict': lambda: fusion})()
-
-    # 正常范围
     with open(os.path.join(cache_dir, 'normal_range.json')) as f:
         data['normal_range'] = json.load(f)
-
-    # 故障数据
-    data['fault_datasets'] = {}
-    with open(os.path.join(cache_dir, 'fault_metadata.json')) as f:
-        data['fault_meta'] = json.load(f)
-
-    # 普通正常数据
+    with open(os.path.join(cache_dir, 'knowledge_pairs.json')) as f:
+        data['knowledge_pairs'] = json.load(f)
     data['df_normal'] = pd.read_csv(os.path.join(cache_dir, 'normal_operation.csv'))
-
-    # 所有变量名
-    data['var_names'] = VAR_NAMES
-    data['root_vars'] = ROOT_VARS
-    data['intermediate_vars'] = INTERMEDIATE_VARS
-    data['output_vars'] = OUTPUT_VARS
-
+    with open(os.path.join(cache_dir, 'fusion_dict.json')) as f:
+        fusion = json.load(f)
+    data['fusion_stats'] = fusion['stats']
     return data
 
 
-def load_fault_df(fault_name):
-    """按需加载故障数据"""
-    cache_dir = os.path.join(os.path.dirname(__file__), 'cache')
-    path = os.path.join(cache_dir, f'{fault_name}.csv')
-    if os.path.exists(path):
-        return pd.read_csv(path)
-    # fallback: 实时生成
-    sim = SyntheticProcessSimulator(seed=42)
-    df, _ = sim.generate_fault_dataset(n_normal=300, n_fault=500, fault_name=fault_name)
-    return df
-
-
-@st.cache_resource
-def make_sim():
-    return SyntheticProcessSimulator(seed=42)
-
-
 # ============================================================
-# 因果图绘制
+# 可视化
 # ============================================================
 def plot_causal_graph(causal_graph, title='因果图', highlight_path=None):
     pos = nx.spring_layout(causal_graph, k=2, iterations=50, seed=42)
     edge_x, edge_y, edge_texts = [], [], []
-
     for u, v, data in causal_graph.edges(data=True):
         x0, y0 = pos[u]; x1, y1 = pos[v]
         edge_x.extend([x0, x1, None]); edge_y.extend([y0, y1, None])
-        stype = data.get('source', 'unknown')
         conf = data.get('confidence', 0)
         edge_texts.append(f'{u} → {v}<br>置信度: {conf:.2f}')
-
     highlight_ex, highlight_ey = [], []
     if highlight_path:
         for i in range(len(highlight_path) - 1):
@@ -130,17 +80,13 @@ def plot_causal_graph(causal_graph, title='因果图', highlight_path=None):
             if u in pos and v in pos:
                 highlight_ex.extend([pos[u][0], pos[v][0], None])
                 highlight_ey.extend([pos[u][1], pos[v][1], None])
-
     node_x, node_y, node_cols, node_texts = [], [], [], []
     for node in causal_graph.nodes():
-        x, y = pos[node]
-        node_x.append(x); node_y.append(y)
-        node_texts.append(node)
+        x, y = pos[node]; node_x.append(x); node_y.append(y); node_texts.append(node)
         if node in ROOT_VARS: node_cols.append('#FF6B6B')
         elif node in INTERMEDIATE_VARS: node_cols.append('#4ECDC4')
         elif node in OUTPUT_VARS: node_cols.append('#45B7D1')
         else: node_cols.append('#96CEB4')
-
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=edge_x, y=edge_y, mode='lines',
         line=dict(width=1.5, color='rgba(150,150,150,0.6)'),
@@ -150,13 +96,13 @@ def plot_causal_graph(causal_graph, title='因果图', highlight_path=None):
             line=dict(width=4, color='red'), name='根因路径'))
     fig.add_trace(go.Scatter(x=node_x, y=node_y, mode='markers+text',
         marker=dict(size=22, color=node_cols, line=dict(width=2, color='white')),
-        text=node_texts, textposition='top center', textfont=dict(size=10),
+        text=node_texts, textposition='top center', textfont=dict(size=9),
         hoverinfo='text', name='变量'))
     fig.update_layout(title=title, showlegend=False, hovermode='closest',
-        margin=dict(b=20, l=20, r=20, t=40),
+        margin=dict(b=20, l=20, r=20, t=40), height=480,
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor='rgba(0,0,0,0)', height=500)
+        plot_bgcolor='rgba(0,0,0,0)')
     return fig
 
 
@@ -164,215 +110,310 @@ def plot_causal_graph(causal_graph, title='因果图', highlight_path=None):
 # 主界面
 # ============================================================
 def main():
-    st.title('🏭 因果增强工业智能体')
-    st.markdown('**创智青山AI智能体创新大赛 · 技术挑战赛道 · 溯因智工**')
+    st.title('🧬 因果增强工业智能体 V2')
+    st.markdown('**全链路自主循环进化 | 创智青山AI智能体创新大赛 · 溯因智工**')
     st.markdown('---')
 
-    # 加载缓存
-    with st.spinner('加载数据...'):
-        cache = load_cache()
+    registry, kg, agent = init_system()
+    cache = load_cache()
+    fused_graph = cache['fused_graph']
+    normal_range = cache['normal_range']
 
     # ---- 侧边栏 ----
     with st.sidebar:
         st.header('⚙️ 控制面板')
-        st.subheader('1. 选择故障场景')
-        fault_name = st.selectbox('故障模式', list(FAULT_MODES.keys()),
-                                  format_func=lambda x: f'{FAULT_MODES[x]["name"]} ({x})')
-        st.subheader('2. 推理设置')
-        top_k = st.slider('显示Top-K根因', 1, 5, 3, key='top_k_slider')
-        st.subheader('3. 运行')
-        if st.button('▶ 运行因果推理', type='primary', use_container_width=True):
-            st.session_state.run_pipeline = True
-        run_pipeline = st.session_state.get('run_pipeline', False)
-        st.markdown('---')
-        st.markdown('### 📊 图例')
-        st.markdown('🔴 根变量  🟢 中间变量  🔵 输出变量')
-        st.markdown('---')
-        st.markdown('### 🔗 边颜色')
-        st.markdown('🟢 双重验证  🟠 仅知识  🔴 数据新发现')
 
-    # ---- 初始状态 ----
-    if not run_pipeline:
-        st.info('👈 从左侧选择故障场景并点击 **运行因果推理** 开始演示')
+        st.subheader('1. 选择故障')
+        fault_categories = ['全部(31种)', '合成数据(10种)', 'TEP真实数据(21种)']
+        cat_choice = st.selectbox('数据源', fault_categories)
+
+        # 按类别筛选故障列表
+        if '合成' in cat_choice:
+            faults = [f for f in registry.list_all() if f.category == 'synthetic']
+        elif 'TEP' in cat_choice:
+            faults = [f for f in registry.list_all() if f.category == 'tep']
+        else:
+            faults = registry.list_all()
+
+        fault_names = [f'{f.fault_id}: {f.name}' for f in faults]
+        fault_choice = st.selectbox('故障模式', fault_names,
+                                     format_func=lambda x: x)
+        selected_id = fault_choice.split(':')[0].strip()
+
+        st.subheader('2. 推理设置')
+        top_k = st.slider('Top-K根因', 1, 5, 3, key='topk')
+
+        st.subheader('3. 运行')
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader('系统架构')
-            st.code('传感器数据 → 因果发现(PCMCI+) ──┐\n'
-                    '                                ├→ 融合因果图 → 根因分析\n'
-                    '工艺文档 → LLM因果抽取 ──────────┘       │\n'
-                    '                                      ├→ 反事实推理\n'
-                    '                                      └→ 处置建议')
+            if st.button('▶ 运行诊断', type='primary', use_container_width=True):
+                st.session_state.run_diag = True
         with c2:
-            st.subheader('核心创新')
-            st.markdown('✅ **双通道因果图构建** — 知识+数据交叉验证\n'
-                       '✅ **因果增强异常检测** — 不仅"什么异常"，更知"为什么"\n'
-                       '✅ **反事实推理** — 量化干预方案效果')
+            if st.button('📚 文献进化', use_container_width=True):
+                st.session_state.run_evo = True
+
+        run_diag = st.session_state.get('run_diag', False)
+        run_evo = st.session_state.get('run_evo', False)
+
+        st.markdown('---')
+        st.metric('📊 故障总数', registry.get_stats()['total'])
+        st.metric('🧬 因果边', kg.number_of_edges())
+
+    # ================================================================
+    # 文献进化
+    # ================================================================
+    if run_evo:
+        st.info('📚 正在爬取钢铁/冶金/石化领域最新文献...')
+        with st.spinner('文献爬取 + AI精读 + 知识库更新中 (~60秒)...'):
+            try:
+                report = agent.run_evolution_cycle(max_new_papers=10)
+                kg = agent.causal_graph  # 更新因果图
+                growth = report.get('knowledge_growth', {})
+                st.success(
+                    f'✅ 进化完成！因果图从 {growth.get("edges_before", 0)} '
+                    f'→ {growth.get("edges_after", 0)} 条边 '
+                    f'(+{growth.get("new_edges", 0)} 新增) | '
+                    f'自测评分: {report.get("final_validation_score", 0):.1%}'
+                )
+            except Exception as e:
+                st.warning(f'文献爬取受限（网络/API）: {e}。使用离线知识库。')
+        st.session_state.run_evo = False
+
+    # ---- 初始状态 ----
+    if not run_diag and not run_evo:
+        st.info('👈 从左侧选择故障，点击 **运行诊断** 或 **文献进化**')
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.subheader('🔍 31种故障覆盖')
+            stats = registry.get_stats()
+            st.markdown(f'**合成数据**: {stats["by_category"].get("synthetic", 0)}种\n'
+                       f'**TEP真实数据**: {stats["by_category"].get("tep", 0)}种\n'
+                       f'**覆盖行业**: 钢铁、石化、通用化工')
+        with c2:
+            st.subheader('📚 文献自主进化')
+            st.markdown('启动时自动爬取钢铁/冶金SCI论文\n'
+                       'AI精读提取新因果机理\n'
+                       '知识库持续增长，越用越准')
+        with c3:
+            st.subheader('🔄 仿真自进化')
+            st.markdown('现场数据 + 文献数据双向回喂\n'
+                       '仿真参数自动微调校准\n'
+                       '文献自测验证模型正确性')
         return
 
-    # ---- 运行推理 ----
-    fault_config = FAULT_MODES[fault_name]
-    fused_graph = cache['fused_graph']
-    truth_graph = cache['truth_graph']
-    normal_range = cache['normal_range']
-    root_cause_var = fault_config['root_cause']
+    # ================================================================
+    # 运行诊断
+    # ================================================================
+    fault_entry = registry.get(selected_id)
+    if not fault_entry:
+        st.error(f'未知故障: {selected_id}')
+        return
 
-    # 加载故障数据
-    df = load_fault_df(fault_name)
-    fault_data = df[df['fault'] == fault_name]
-    sample = fault_data.iloc[min(200, len(fault_data) - 1)]
-    observation = {v: float(sample[v]) for v in VAR_NAMES}
+    st.success(f'✅ 诊断: {fault_entry.fault_id} — {fault_entry.name} | '
+               f'数据源: {fault_entry.data_source}')
+
+    # 加载数据
+    with st.spinner('加载故障数据...'):
+        df, meta = registry.load_fault(selected_id)
+        if fault_entry.category == 'synthetic':
+            fault_data = df[df['fault'] == selected_id]
+            var_list = VAR_NAMES
+        else:
+            fault_data = df[df['fault_phase'] == 'test']
+            var_list = [v for v in TEP_VAR_NAMES[:8] if v in df.columns]
+
+        sample_idx = min(len(fault_data) - 1, int(len(fault_data) * 0.7))
+        sample = fault_data.iloc[sample_idx]
+        observation = {v: float(sample[v]) for v in var_list if v in df.columns}
 
     # 根因分析
-    analyzer = RootCauseAnalyzer(fused_graph)
-    normal_data = df[df['fault'] == 'NORMAL'][VAR_NAMES]
-    analyzer.set_normal_ranges(normal_data, n_std=3.0)
+    use_graph = fused_graph if fault_entry.category == 'synthetic' else kg
+    analyzer = RootCauseAnalyzer(use_graph)
+    normal_subset = df[df.get('fault', df.get('fault_phase')) == 'NORMAL'][var_list]
+    if len(normal_subset) > 50:
+        analyzer.set_normal_ranges(normal_subset.iloc[:300])
+    else:
+        analyzer.normal_ranges = {v: normal_range.get(v, (-np.inf, np.inf)) for v in var_list}
     reports = analyzer.analyze(observation, top_k=top_k)
 
     # 反事实引擎
-    cf_engine = CounterfactualEngine(fused_graph)
+    cf_engine = CounterfactualEngine(use_graph)
     coeffs = {(e.cause, e.effect): e.coefficient for e in CAUSAL_GRAPH_TRUTH}
     cf_engine.set_manual_coefficients(coeffs)
-    target_var = reports[0].abnormal_variable if reports else VAR_NAMES[4]
-
-    st.success(f'✅ 推理完成 | 故障: {fault_config["name"]}')
 
     # ============ Tabs ============
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ['📊 概览面板', '🔍 因果图', '🎯 根因分析', '🔄 反事实推理', '📋 技术报告'])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        ['📊 概览', '🔍 因果图', '🎯 根因分析', '🔄 反事实',
+         '📚 知识库', '🧬 进化状态'])
 
-    # ---- Tab1: 概览 ----
     with tab1:
-        st.subheader(f'故障场景: {fault_config["name"]}')
-        st.markdown(f'**描述**: {fault_config["description"]}')
-        st.markdown(f'**Ground Truth根因**: `{fault_config["root_cause"]}`')
-        st.markdown(f'**因果路径**: {fault_config["causal_path"]}')
-
-        st.subheader('当前变量状态')
+        st.subheader(f'故障: {fault_entry.name}')
+        st.markdown(f'**描述**: {fault_entry.description}')
+        st.markdown(f'**分类**: {fault_entry.category} | **行业**: {fault_entry.industry} | '
+                   f'**严重度**: {fault_entry.severity} | **数据源**: {fault_entry.data_source}')
+        if fault_entry.causal_path:
+            st.markdown(f'**因果路径**: {fault_entry.causal_path}')
+        st.subheader('变量状态')
         cols = st.columns(4)
         anomaly_count = 0
-        for i, var in enumerate(VAR_NAMES):
-            val = observation[var]
-            lo, hi = normal_range.get(var, (-np.inf, np.inf))
-            if lo <= val <= hi:
-                cols[i % 4].metric(var, f'{val:.3f}')
-            else:
-                anomaly_count += 1
-                dev = (val - (lo + hi) / 2) / ((hi - lo) / 2)
-                cols[i % 4].metric(var, f'{val:.3f}', delta=f'{dev:+.1f}σ', delta_color='inverse')
-        st.metric('异常变量数', anomaly_count, delta=f'/ {len(VAR_NAMES)} 总变量', delta_color='off')
+        for i, var in enumerate(var_list[:12]):
+            if var in observation:
+                val = observation[var]
+                lo, hi = analyzer.normal_ranges.get(var, (-np.inf, np.inf))
+                if lo <= val <= hi:
+                    cols[i % 4].metric(var[:15], f'{val:.3f}')
+                else:
+                    anomaly_count += 1
+                    dev = (val - (lo + hi) / 2) / max((hi - lo) / 2, 1e-6)
+                    cols[i % 4].metric(var[:15], f'{val:.3f}', delta=f'{dev:+.1f}σ',
+                                       delta_color='inverse')
+        st.metric('异常变量', anomaly_count, delta=f'/ {len(var_list)} 总变量', delta_color='off')
 
-    # ---- Tab2: 因果图 ----
     with tab2:
         c1, c2 = st.columns([2, 1])
         with c1:
-            graph_choice = st.radio('选择因果图',
-                ['融合因果图 (最终)', '知识因果图', '数据因果图', 'Ground Truth'],
-                horizontal=True, key='causal_graph_selector')
-            graph_map = {
-                '融合因果图 (最终)': fused_graph,
-                '知识因果图': cache['knowledge_graph'],
-                '数据因果图': cache['data_graph'],
-                'Ground Truth': truth_graph,
-            }
             highlight = reports[0].root_causes[0].path if reports and reports[0].root_causes else None
-            fig = plot_causal_graph(graph_map[graph_choice], graph_choice, highlight)
+            fig = plot_causal_graph(use_graph, f'因果图 — {fault_entry.name}', highlight)
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.subheader('融合统计')
-            stats = cache['fusion'].fusion_stats
-            st.metric('总因果边', stats.get('total_edges', 0))
-            st.metric('双重验证', stats.get('dual_verified', 0), delta='高置信度')
-            st.metric('知识通道独有', stats.get('knowledge_only', 0), delta='待数据验证')
-            st.metric('数据新发现', stats.get('data_discovered', 0), delta='⚡ 新发现')
+            st.subheader('图统计')
+            st.metric('节点', use_graph.number_of_nodes())
+            st.metric('因果边', use_graph.number_of_edges())
+            if 'fusion_stats' in cache:
+                fs = cache['fusion_stats']
+                st.metric('双重验证', fs.get('dual_verified', 0), delta='高置信')
+                st.metric('知识独有', fs.get('knowledge_only', 0))
+                st.metric('数据发现', fs.get('data_discovered', 0), delta='⚡')
 
-    # ---- Tab3: 根因分析 ----
     with tab3:
         if reports:
-            for report in reports:
+            for report in reports[:6]:
                 lo, hi = report.normal_range
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.metric(f'⚠ 异常: {report.abnormal_variable}',
-                             f'{report.observed_value:.3f}', delta=f'正常 [{lo:.1f}, {hi:.1f}]', delta_color='off')
+                    st.metric(f'⚠ {report.abnormal_variable}', f'{report.observed_value:.3f}',
+                             delta=f'正常 [{lo:.1f}, {hi:.1f}]', delta_color='off')
                 with c2:
                     if report.root_causes:
-                        st.metric(f'🔍 Top-1根因: {report.root_causes[0].variable}',
-                                 f'评分: {report.root_causes[0].score:.3f}')
-
-                st.markdown('#### 根因排序')
-                rc_data = [{'排名': i+1, '根因变量': rc.variable, '评分': f'{rc.score:.4f}',
-                           '因果路径': ' → '.join(rc.path), '路径长度': rc.path_length}
-                          for i, rc in enumerate(report.root_causes)]
-                st.dataframe(pd.DataFrame(rc_data), use_container_width=True, hide_index=True)
-
-                st.markdown('#### 因果路径追溯')
-                for i, rc in enumerate(report.root_causes[:2]):
-                    st.markdown(f'**路径{i+1}**: {" ➔ ".join(rc.path)}')
-                    st.caption(f'置信度: {rc.confidence:.3f}')
-                    st.progress(min(rc.score, 1.0), text=f'评分: {rc.score:.3f}')
-
-                st.markdown('#### 💡 处置建议')
-                for i, action in enumerate(report.recommended_actions[:5]):
-                    if '⚠⚠⚠' in action: st.error(action.replace('⚠⚠⚠ ', ''))
-                    elif '⚠' in action: st.warning(action.replace('⚠ ', ''))
-                    else: st.info(f'{i+1}. {action}')
+                        rc = report.root_causes[0]
+                        st.metric(f'🔍 根因: {rc.variable}', f'评分: {rc.score:.3f}')
+                if report.root_causes:
+                    st.markdown('**根因排序**')
+                    rc_df = pd.DataFrame([{
+                        '排名': i+1, '根因': rc.variable, '评分': f'{rc.score:.4f}',
+                        '路径': ' → '.join(rc.path[:4])
+                    } for i, rc in enumerate(report.root_causes)])
+                    st.dataframe(rc_df, use_container_width=True, hide_index=True)
+                if report.recommended_actions:
+                    for act in report.recommended_actions[:3]:
+                        if '⚠⚠⚠' in act: st.error(act.replace('⚠⚠⚠ ', ''))
+                        elif '⚠' in act: st.warning(act.replace('⚠ ', ''))
+                        else: st.info(act)
+                st.markdown('---')
         else:
             st.warning('未检测到异常')
 
-    # ---- Tab4: 反事实推理 ----
     with tab4:
-        st.subheader('🔄 反事实推理: 如果...会怎样？')
-        target_for_cf = st.selectbox('关注结果变量', OUTPUT_VARS + INTERMEDIATE_VARS, index=0)
-        c1, c2, c3 = st.columns(3)
-        interventions = [
-            {root_cause_var: (normal_range[root_cause_var][0] + normal_range[root_cause_var][1]) / 2},
-            {'Feed_Flow': 95},
-            {root_cause_var: (normal_range[root_cause_var][0] + normal_range[root_cause_var][1]) / 2, 'Feed_Flow': 95},
-        ]
-        labels = [f'方案1: 恢复 {root_cause_var}', '方案2: 调整 Feed_Flow', '方案3: 综合干预']
-        for col, inter, label in zip([c1, c2, c3], interventions, labels):
-            with col:
-                result = cf_engine.what_if(observation, inter, target_for_cf, normal_range)
-                st.markdown(f'**{label}**')
-                st.metric(f'{target_for_cf} 预期', f'{result.counterfactual_value:.4f}',
-                         delta=f'{result.improvement:+.4f}')
-                st.caption(f'实际: {result.factual_value:.4f}')
+        st.subheader('🔄 反事实推理')
+        if reports:
+            target = st.selectbox('关注变量', var_list[:8], index=0)
+            c1, c2, c3 = st.columns(3)
+            top_rc = None
+            for r in reports:
+                if r.root_causes:
+                    top_rc = r.root_causes[0].variable; break
+            if top_rc and top_rc in analyzer.normal_ranges:
+                lo, hi = analyzer.normal_ranges[top_rc]
+                normal_val = (lo + hi) / 2
+                interventions = [
+                    {top_rc: normal_val},
+                    {'Feed_Flow': 95} if 'Feed_Flow' in var_list else {var_list[0]: 0},
+                    {top_rc: normal_val, var_list[0]: float(observation.get(var_list[0], 0))},
+                ]
+                labels = [f'方案1: 恢复{top_rc}', '方案2: 其他干预', '方案3: 综合']
+                for col, inter, label in zip([c1, c2, c3], interventions, labels):
+                    with col:
+                        try:
+                            res = cf_engine.what_if(observation, inter, target, analyzer.normal_ranges)
+                            st.markdown(f'**{label}**')
+                            st.metric(f'{target} 预期', f'{res.counterfactual_value:.3f}',
+                                     delta=f'{res.improvement:+.3f}')
+                        except Exception:
+                            st.caption(f'{label}: 参数不足')
+
+    with tab5:
+        st.subheader('📚 知识库')
+        pairs = cache.get('knowledge_pairs', [])
+        st.markdown(f'**因果知识条目**: {len(pairs)} 条')
+        if pairs:
+            kp_df = pd.DataFrame([{
+                '原因': p.get('cause', ''), '结果': p.get('effect', ''),
+                '方向': p.get('direction', ''), '置信度': f'{p.get("confidence", 0):.2f}',
+                '机制': p.get('mechanism', '')[:40]
+            } for p in pairs[:20]])
+            st.dataframe(kp_df, use_container_width=True, hide_index=True)
 
         st.markdown('---')
-        st.subheader('📊 异常贡献归因分解')
-        candidate = [root_cause_var]
-        for node in list(fused_graph.predecessors(target_for_cf))[:4]:
-            if node not in candidate: candidate.append(node)
-        normal_vals = {v: (normal_range[v][0] + normal_range[v][1]) / 2 for v in candidate if v in normal_range}
-        attr = cf_engine.attribution(observation, target_for_cf, candidate[:5], normal_vals)
-        fig = px.bar(x=list(attr.keys()), y=list(attr.values()),
-                    labels={'x': '变量', 'y': '贡献比例'},
-                    title=f'各因素对 {target_for_cf} 异常的贡献', text_auto='.1%')
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader('📖 文献爬取状态')
+        if st.button('🔄 手动触发文献爬取', use_container_width=True):
+            with st.spinner('爬取中...'):
+                try:
+                    from src.literature_crawler import LiteratureCrawler
+                    crawler = LiteratureCrawler()
+                    papers = crawler.search_all()
+                    st.success(f'获取 {len(papers)} 篇文献')
+                    papers_df = pd.DataFrame([{
+                        '标题': p.title[:60], '年份': p.year,
+                        '来源': p.source_type, '引用': p.citation_count
+                    } for p in papers[:20]])
+                    st.dataframe(papers_df, use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.warning(f'爬取受限: {e}')
 
-    # ---- Tab5: 技术报告 ----
-    with tab5:
-        st.subheader('📋 技术报告摘要')
-        st.markdown(f'### 故障案例: {fault_config["name"]}\n**描述**: {fault_config["description"]}\n')
-        if reports and reports[0].root_causes:
-            rc = reports[0].root_causes[0]
-            st.markdown(f'**根因识别**: `{rc.variable}` | **因果路径**: `{" → ".join(rc.path)}` | **评分**: {rc.score:.4f}')
-        st.markdown('---'); st.subheader('方法对比')
-        comp = pd.DataFrame({
-            '方法': ['传统异常检测', '纯大模型方案', '纯数据因果发现', '本方案'],
-            '根因分析': ['✗', '△ (幻觉)', '△ (无解释)', '✓ (双通道)'],
-            '反事实推理': ['✗', '✗', '△', '✓'],
-            '处置建议': ['✗', '△ (不保证)', '✗', '✓ (因果约束)'],
-            '可解释性': ['低', '中', '中', '高'],
-        })
-        st.dataframe(comp, use_container_width=True, hide_index=True)
-        st.markdown('---'); st.subheader('技术栈')
-        st.markdown('| 组件 | 技术 |\n|------|------|\n| 因果发现 | PCMCI+ (Tigramite) |'
-                   '\n| 因果图融合 | 双通道置信度加权融合算法 (原创) |'
-                   '\n| 因果推断 | Pearl SCM + 反事实推理 |'
-                   '\n| 知识抽取 | LLM (Claude) + 预提取知识库 |'
-                   '\n| 可视化 | Plotly + NetworkX + Streamlit |')
-        st.caption('因果增强工业智能体 · 创智青山AI智能体创新大赛 · 溯因智工')
+    with tab6:
+        st.subheader('🧬 自主进化状态')
+        status = agent.get_status()
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.metric('Agent版本', status['agent_version'])
+        with c2: st.metric('进化代数', status['evolution_generation'])
+        with c3: st.metric('因果边', status['causal_graph_size'])
+        with c4: st.metric('知识库', status['knowledge_base_size'])
+
+        st.markdown('---')
+        st.subheader('📈 仿真参数进化轨迹')
+        params = status['current_params']
+        param_df = pd.DataFrame([{
+            '参数': k, '当前值': f'{v:.4f}',
+            '类别': '热力学' if 'temp' in k or 'heat' in k else ('换热' if 'transfer' in k or 'fouling' in k else ('侵蚀' if 'erosion' in k or 'wear' in k else '动力学'))
+        } for k, v in params.items()])
+        st.dataframe(param_df, use_container_width=True, hide_index=True)
+
+        st.markdown('---')
+        st.subheader('🔄 文献→仿真 全链路循环')
+        st.markdown('''
+        ```
+        文献爬取 → AI精读 → 因果知识库 ──→ 仿真参数校准
+            ↑                                  ↓
+        自测验证 ←────────────────────── 仿真重跑
+            │
+        通过? ── 否 → 回到文献爬取
+            ── 是 → 部署更新 ✓
+        ```
+        ''')
+
+        if st.button('▶ 执行一个进化周期', type='primary', use_container_width=True):
+            with st.spinner('全链路进化中 (~60秒)...'):
+                try:
+                    report = agent.run_evolution_cycle(max_new_papers=10)
+                    growth = report.get('knowledge_growth', {})
+                    st.success(
+                        f'进化完成！因果图 {growth.get("edges_before", 0)} → '
+                        f'{growth.get("edges_after", 0)} 条边 '
+                        f'(+{growth.get("new_edges", 0)}) | '
+                        f'自测评分: {report.get("final_validation_score", 0):.1%}'
+                    )
+                except Exception as e:
+                    st.error(f'进化失败: {e}')
 
 
 if __name__ == '__main__':
