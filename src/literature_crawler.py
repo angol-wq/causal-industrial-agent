@@ -175,19 +175,96 @@ class LiteratureCrawler:
         return papers
 
     # ================================================================
-    # 数据源4: CNKI知网模拟搜索 (需在中国教育网环境)
+    # 数据源4: 百度学术 (国内可用, 免费)
+    # ================================================================
+    def search_baidu_scholar(self, query: str, limit: int = 10) -> List[Paper]:
+        """搜索百度学术 (国内稳定访问)"""
+        url = "https://xueshu.baidu.com/s"
+        params = {"wd": query, "pn": 0, "rn": limit}
+        papers = []
+        try:
+            resp = self.session.get(url, params=params, timeout=15,
+                                   headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code != 200:
+                return papers
+            # 简单提取标题
+            titles = re.findall(r'<h3[^>]*class="t[^"]*"[^>]*>(.*?)</h3>', resp.text)
+            for t in titles[:limit]:
+                title = re.sub(r'<[^>]+>', '', t).strip()
+                if title and len(title) > 5:
+                    papers.append(Paper(title=title, source="百度学术",
+                                       source_type="中文文献"))
+        except Exception as e:
+            print(f"[百度学术] 搜索失败: {e}")
+        return papers
+
+    # ================================================================
+    # 数据源5: 本地手动文献 (离线可用, 永远不失败)
+    # ================================================================
+    def load_manual_papers(self, manual_dir: str = "data/literature/manual") -> List[Paper]:
+        """
+        加载手动放入的文献文件
+
+        使用方法: 把下载好的论文PDF/摘要文本放入 data/literature/manual/
+        支持: .txt (纯文本摘要) / .json (结构化元数据)
+
+        格式示例 (manual.json):
+        [
+          {
+            "title": "高炉冷却壁故障诊断研究",
+            "abstract": "本文研究了...",
+            "authors": ["张三", "李四"],
+            "year": 2025
+          }
+        ]
+        """
+        papers = []
+        if not os.path.exists(manual_dir):
+            os.makedirs(manual_dir, exist_ok=True)
+            # 创建示例文件
+            with open(os.path.join(manual_dir, "example.txt"), "w", encoding="utf-8") as f:
+                f.write("高炉冷却壁温度异常与冷却水流量下降存在因果关系\n"
+                       "炼钢转炉氧枪堵塞导致吹炼效率降低约15%\n"
+                       "连铸结晶器液位波动与拉速变化的滞后时间为2-5秒\n")
+            print(f"[本地文献] 已创建示例文件: {manual_dir}/example.txt")
+
+        for filename in os.listdir(manual_dir):
+            path = os.path.join(manual_dir, filename)
+            if filename.endswith(".json"):
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                    for item in (data if isinstance(data, list) else [data]):
+                        papers.append(Paper(
+                            title=item.get("title", ""),
+                            authors=item.get("authors", []),
+                            abstract=item.get("abstract", ""),
+                            year=item.get("year", 0),
+                            source="手动添加",
+                            source_type=item.get("source_type", "离线文献"),
+                        ))
+            elif filename.endswith((".txt", ".md")):
+                with open(path, encoding="utf-8") as f:
+                    text = f.read().strip()
+                    if text:
+                        papers.append(Paper(
+                            title=filename.replace(".txt", ""),
+                            abstract=text[:500],
+                            source="手动添加",
+                            source_type="离线文本",
+                        ))
+
+        if papers:
+            print(f"[本地文献] 加载 {len(papers)} 篇手动文献")
+        return papers
+
+    # ================================================================
+    # 数据源6: CNKI知网 (需教育网IP)
     # ================================================================
     def search_cnki(self, query: str, limit: int = 20) -> List[Paper]:
-        """
-        搜索中国知网（需要在中国教育网/IP范围内，或配置VPN）
-        若无法访问，自动返回空列表并提示
-        """
-        url = "https://kns.cnki.net/kns8/defaultresult/index"
-        # CNKI需要复杂的请求参数和cookie，这里提供框架
-        # 实际使用时需配置学校VPN或使用CNKI授权API
+        """搜索中国知网（需教育网IP或学校VPN）"""
         print(f"[CNKI] 搜索: {query}")
-        print("  ⚠ CNKI需要教育网IP或学校VPN。如不可用，请手动下载论文放入 data/literature/manual/")
-        return []  # 框架预留，实际需配置认证
+        print("  ⚠ CNKI需教育网IP。替代方案: 手动下载论文放入 data/literature/manual/")
+        return []
 
     # ================================================================
     # 综合搜索：聚合所有数据源
@@ -198,21 +275,31 @@ class LiteratureCrawler:
             keyword_set = self.DEFAULT_KEYWORDS
 
         all_papers = {}
-        for kw in keyword_set[:5]:  # 限制5个关键词避免反爬
-            print(f"\n[爬虫] 搜索: {kw}")
 
-            # 并行搜索各数据源
-            for paper in self.search_semantic_scholar(kw):
-                key = hashlib.md5(paper.title.encode()).hexdigest()
-                if key not in all_papers:
-                    all_papers[key] = paper
+        # 优先: 本地手动文献 (永远可用)
+        for paper in self.load_manual_papers():
+            key = hashlib.md5(paper.title.encode()).hexdigest()
+            all_papers[key] = paper
 
-            for paper in self.search_arxiv(kw):
-                key = hashlib.md5(paper.title.encode()).hexdigest()
-                if key not in all_papers:
-                    all_papers[key] = paper
+        # 海外源 (可能受限, 失败不影响)
+        for kw in keyword_set[:3]:
+            try:
+                for paper in self.search_semantic_scholar(kw, limit=10):
+                    key = hashlib.md5(paper.title.encode()).hexdigest()
+                    if key not in all_papers:
+                        all_papers[key] = paper
+            except Exception as e:
+                print(f"[Semantic Scholar] {kw}: {e}")
 
-            time.sleep(1)  # 礼貌延迟
+            try:
+                for paper in self.search_baidu_scholar(kw):
+                    key = hashlib.md5(paper.title.encode()).hexdigest()
+                    if key not in all_papers:
+                        all_papers[key] = paper
+            except Exception as e:
+                print(f"[百度学术] {kw}: {e}")
+
+            time.sleep(0.5)
 
         # 武钢新闻
         for paper in self.crawl_wugang_news():
