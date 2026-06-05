@@ -60,10 +60,14 @@ def build_causal_graph():
     knowledge_pairs = extract_from_synthetic_doc(doc_path, VAR_NAMES, use_llm=False)
     knowledge_graph = LLMCausalExtractor.pairs_to_graph(knowledge_pairs, VAR_NAMES)
 
-    # 通道2: 数据驱动
-    cd = CausalDiscovery(VAR_NAMES)
-    data_subset = df_normal[VAR_NAMES].iloc[:500]
-    data_graph = cd.discover_pcmciplus(data=data_subset, tau_max=5)
+    # 通道2: 数据驱动（如tigramite不可用则跳过）
+    data_graph = knowledge_graph.copy()  # 默认用知识图
+    try:
+        cd = CausalDiscovery(VAR_NAMES)
+        data_subset = df_normal[VAR_NAMES].iloc[:500]
+        data_graph = cd.discover_pcmciplus(data=data_subset, tau_max=5)
+    except Exception as e:
+        st.warning(f"PCMCI+不可用（{e}），仅使用知识因果图。不影响演示。")
 
     # 融合
     fusion = CausalGraphFusion()
