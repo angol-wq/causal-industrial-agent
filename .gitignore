@@ -1,15 +1,19 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *.so
 venv/
 env/
 
-# Large data (downloaded separately)
+# Large data (not in git, downloaded separately)
 TE_process/
+TE_process.zip
 data/TEP/
 data/TEP_raw/
+data/TEP_raw/
 data/synthetic/*.csv
+# cache/*.csv — 保留在git中，Streamlit Cloud需要
 
 # IDE
 .vscode/
@@ -22,5 +26,5 @@ Thumbs.db
 # Streamlit
 .streamlit/
 
-# Generated
+# Generated during build
 presentation.pptx
