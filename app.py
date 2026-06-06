@@ -265,13 +265,21 @@ def main():
                 cols = st.columns(min(3, len(vars_in_cat)))
                 for i, (var, cn) in enumerate(vars_in_cat):
                     with cols[i % 3]:
-                        lo, hi = normal_range.get(var, (0, 200))
+                        lo, hi = normal_range.get(var, (0, 100))
                         mid = (lo + hi) / 2
+                        rng = abs(hi - lo)
+                        # 自适应步长: 大范围粗调，小范围细调
+                        if rng < 0.1: step = 0.001
+                        elif rng < 1: step = 0.01
+                        elif rng < 10: step = 0.1
+                        elif rng < 100: step = 1.0
+                        else: step = 5.0
                         # 扩大范围让用户可以模拟故障
                         val = st.slider(
                             f'{cn["name"]} ({cn["unit"]})',
-                            float(lo * 0.5), float(hi * 2.0),
-                            float(mid), 5.0,
+                            float(min(lo * 0.5, lo - rng)), float(max(hi * 2.0, hi + rng)),
+                            float(max(min(mid, hi * 2.0), lo * 0.5)),
+                            step,
                             key=f'sim_{var}'
                         )
                         custom_obs[var] = val
