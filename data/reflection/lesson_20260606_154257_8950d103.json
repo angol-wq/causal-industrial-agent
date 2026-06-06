@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-06-06T15:42:57.423355",
+  "error_type": "missing_node",
+  "what_happened": "真实根因'Pump_Current'不在因果图中，Agent无法诊断",
+  "why_wrong": "因果图缺少变量节点: Pump_Current",
+  "extracted_rule": {
+    "action": "add_node",
+    "node": "Pump_Current",
+    "context": "泵电机绕组短路→电流升高→但转速下降→流量不足",
+    "evidence": "操作员现场确认: 冷却水泵电机电流异常"
+  },
+  "confidence": 0.8,
+  "applied": false
+}

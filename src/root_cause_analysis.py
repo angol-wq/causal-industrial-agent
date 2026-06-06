@@ -260,63 +260,198 @@ class RootCauseAnalyzer:
 
     def _generate_actions(self, root_causes: List[RootCause],
                           anomaly: AnomalyFinding) -> List[str]:
-        """根据根因生成处置建议"""
+        """生成专业级诊断报告: 原因解释 + 物理机制 + 分步处置 + 预期效果"""
         actions = []
 
         if not root_causes:
-            actions.append(f"⚠ 未找到明确根因，建议人工排查 {anomaly.variable}")
+            actions.append(f"⚠ 未找到明确根因。{anomaly.variable}偏离正常范围，"
+                          f"但其上游因果链中无其他异常变量同时偏离，"
+                          f"推测为独立的局部故障或传感器异常。建议人工巡检确认。")
             return actions
 
         top = root_causes[0]
         variable = top.variable
 
-        # 基于变量名的启发式建议（实际使用中可接知识库）
-        action_templates = {
+        # 起点: 根因解释
+        root_explanations = {
+            "CW_Valve": (
+                f"**根因分析**: 冷却水阀门开度({variable})偏离正常值，"
+                f"评分 {top.score:.3f}，因果效应系数 {abs(top.causal_effect):.3f}。\n\n"
+                f"**物理机制**: 阀门作为冷却水回路的节流元件，其开度直接决定冷却水流量。"
+                f"根据流体力学伯努利方程 Q = Cv × √(ΔP)，开度↓ → 流量系数Cv↓ → 流量Q↓。"
+                f"流量不足导致反应器换热不充分，热量积累引起温度连锁上升。\n\n"
+                f"**常见原因**: (1)阀芯结垢或异物卡滞 (2)气动/电动执行器故障 "
+                f"(3)定位器反馈信号漂移 (4)阀座密封面磨损"
+            ),
+            "CW_Flow": (
+                f"**根因分析**: 冷却水流量({variable})异常，评分 {top.score:.3f}。\n\n"
+                f"**物理机制**: 冷却水是反应器的主要散热介质。"
+                f"根据热平衡方程 Q_removed = ṁ_cw × Cp × (T_out - T_in)，"
+                f"流量ṁ_cw↓ → 换热量Q_removed↓ → 反应器温度T_r↑。"
+                f"同时，流量下降会导致换热器对数平均温差(LMTD)变化，"
+                f"进一步降低换热效率。\n\n"
+                f"**常见原因**: 上游阀门故障、泵性能下降、管路堵塞或泄漏、过滤器压差过大"
+            ),
+            "CW_Inlet_Temp": (
+                f"**根因分析**: 冷却水入口温度({variable})升高，评分 {top.score:.3f}。\n\n"
+                f"**物理机制**: 换热器的驱动力是对数平均温差(LMTD)。"
+                f"入口温度↑ → 冷热流体温差↓ → LMTD↓ → 换热量↓ → 反应器温度↑。"
+                f"根据传热方程 Q = U × A × LMTD，LMTD每下降1°C，换热量约减少2-5%。\n\n"
+                f"**常见原因**: 冷却塔风机故障、填料老化、布水不均、环境湿球温度过高、循环水浓缩倍数超标"
+            ),
+            "Feed_Flow": (
+                f"**根因分析**: 进料流量({variable})异常，评分 {top.score:.3f}。\n\n"
+                f"**物理机制**: 进料流量变化直接影响反应器内的物料停留时间和空间速率。"
+                f"停留时间 τ = V/Q，流量Q↑ → τ↓ → 反应不充分 → 转化率降低。"
+                f"同时流量增大导致反应器内物料累积，压力升高（PV=nRT）。\n\n"
+                f"**常见原因**: 进料泵转速漂移、调节阀故障、上游压力波动、流量计零点漂移"
+            ),
+            "Feed_Conc": (
+                f"**根因分析**: 进料浓度({variable})偏离正常范围，评分 {top.score:.3f}。\n\n"
+                f"**物理机制**: 对于一级反应 r = k × C，反应物浓度C是决定反应速率的直接因素。"
+                f"浓度每下降10%，在相同温度下反应速率同比例下降10%。"
+                f"对于级数>1的反应，浓度下降的影响会被放大。"
+                f"产物浓度由反应速率与停留时间共同决定。\n\n"
+                f"**常见原因**: 上游原料批次波动、配比误差、溶剂/稀释剂过量、原料储罐分层"
+            ),
+            "Reaction_Rate": (
+                f"**根因分析**: 反应速率({variable})变化，但不一定是根本原因，"
+                f"通常由上游变量(温度/浓度/压力)驱动。评分 {top.score:.3f}。\n\n"
+                f"**物理机制**: 根据Arrhenius方程 k = A × exp(-Ea/RT)，"
+                f"反应速率常数k随温度T指数变化。温度每升高10°C，速率约翻倍。"
+                f"浓度和压力也通过质量作用定律影响速率。\n\n"
+                f"**建议**: 优先处置上游根因 {top.path[0] if len(top.path) > 1 else variable}，"
+                f"而非直接干预反应速率。"
+            ),
+        }
+
+        # 找到匹配的根因解释
+        explanation_added = False
+        for key, explanation in root_explanations.items():
+            if key in variable:
+                actions.append(explanation)
+                explanation_added = True
+                break
+        if not explanation_added:
+            actions.append(f"**根因分析**: {variable}是导致{anomaly.variable}异常的最可能根因"
+                          f"（评分 {top.score:.3f}），因果路径: {' → '.join(top.path)}。")
+
+        # 因果关系链
+        if len(top.path) > 1:
+            chain = " → ".join(top.path)
+            actions.append(f"\n**因果链**: `{chain}`\n"
+                          f"该链路上每一步的因果关系均来自{len(top.path)-1}条因果边，"
+                          f"整体置信度 {top.confidence:.3f}。")
+
+        # 分步处置建议（按优先级排）
+        step_templates = {
             "CW_Valve": [
-                f"检查{variable}是否存在机械卡滞",
-                f"尝试增大{variable}开度指令,观察CW_Flow是否响应",
-                f"如{variable}无响应,切换至备用冷却回路",
+                ("**🔴 紧急处置** (5分钟内)", [
+                    "1. 在DCS上尝试远程增大阀门开度指令，观察CW_Flow是否响应",
+                    "2. 若流量无变化，确认阀门定位器反馈信号是否正常",
+                    "3. 若反应器温度持续上升(>185°C)，立即启动紧急停车程序",
+                ]),
+                ("**🟡 短期修复** (2小时内)", [
+                    "4. 现场检查阀门执行机构(气动/电动)是否有异响、过热",
+                    "5. 检查阀门定位器输入/输出信号，使用475手操器校准",
+                    "6. 若阀芯卡滞，尝试手动盘动阀门手轮，确认机械灵活性",
+                ]),
+                ("**🟢 长期根治** (下次检修窗口)", [
+                    "7. 拆卸阀体检修: 清理阀芯结垢、更换密封填料",
+                    "8. 检查阀门选型是否满足工艺要求(Cv值是否匹配)",
+                    "9. 建议加装阀门在线诊断系统，实现预测性维护",
+                ]),
             ],
             "CW_Flow": [
-                f"检查冷却水回路: 确认阀门开度→如阀门正常,检查泵运行状态",
-                f"检查冷却水管路是否有堵塞或泄漏",
+                ("**🔴 紧急处置**", [
+                    "1. 确认上游阀门(CW_Valve)状态是否正常",
+                    "2. 若阀门正常，检查冷却水泵电流和出口压力",
+                    "3. 切换至备用冷却水泵，观察流量是否恢复",
+                ]),
+                ("**🟡 短期修复**", [
+                    "4. 检查冷却水管路压差: 进出口压差异常增大→管路堵塞; 压差过小→泵出力不足",
+                    "5. 清洗Y型过滤器，检查是否有异物堵塞",
+                    "6. 排放管路高点排气，排除气缚可能",
+                ]),
+                ("**🟢 长期根治**", [
+                    "7. 建立冷却水流量趋势监测，设定流量下降5%预警",
+                    "8. 定期检测冷却水水质(硬度/浊度/pH)，控制结垢趋势",
+                ]),
             ],
             "CW_Inlet_Temp": [
-                f"检查冷却塔运行状态(风机/填料/布水器)",
-                f"检查循环水补充量是否充足",
-                f"如持续恶化,降低反应负荷运行",
+                ("**🔴 紧急处置**", [
+                    "1. 检查冷却塔风机运行电流，确认是否全部投入",
+                    "2. 检查循环水补水阀是否正常开启",
+                    "3. 若温度持续升高，降低反应负荷至设计值的70%",
+                ]),
+                ("**🟡 短期修复**", [
+                    "4. 测量冷却塔进出水温差(逼近度)，逼近度>5°C→填料老化",
+                    "5. 检查冷却塔布水器是否均匀分布，清理堵塞喷嘴",
+                    "6. 检测循环水水质: 浓缩倍数是否超标，必要时加大排污",
+                ]),
+                ("**🟢 长期根治**", [
+                    "7. 根据季节建立冷却塔性能基线，偏离10%即触发检修",
+                    "8. 评估冷却塔扩容/改造需求，预留夏季高温余量",
+                ]),
             ],
             "Feed_Flow": [
-                f"检查{variable}控制回路和调节阀",
-                f"确认进料泵运行状态",
-                f"如{variable}波动,切换备用泵",
+                ("**🔴 紧急处置**", [
+                    "1. 立即检查进料泵运行电流和出口压力",
+                    "2. 切换到备用泵，确认流量恢复正常",
+                    "3. 检查进料调节阀实际开度与DCS指令是否一致",
+                ]),
+                ("**🟡 短期修复**", [
+                    "4. 校准进料流量计(使用标准流量标定装置)",
+                    "5. 检查上游储罐液位和氮封压力是否正常",
+                    "6. 排查管路是否有内漏(关闭出口阀观察压力保持情况)",
+                ]),
+                ("**🟢 长期根治**", [
+                    "7. 建立进料泵性能曲线(P-Q曲线)定期测试制度",
+                    "8. 关键进料回路加装备用流量计，实现冗余检测",
+                ]),
             ],
             "Feed_Conc": [
-                f"检查上游原料配比与品质",
-                f"联系前道工序确认原料批次",
-                f"如{variable}不达标,考虑适当降低Feed_Flow延长停留时间",
-            ],
-            "Reaction_Rate": [
-                f"{top.path[0]}异常导致反应速率变化",
-                f"优先处置上游根因: {top.path[0]}",
+                ("**🔴 紧急处置**", [
+                    "1. 取样分析当前进料浓度(实验室验证，排除在线分析仪漂移)",
+                    "2. 联系前道工序确认原料配比和批次信息",
+                    "3. 若浓度确实偏低，适当降低进料流量延长停留时间补偿",
+                ]),
+                ("**🟡 短期修复**", [
+                    "4. 检查原料储罐是否有分层现象(密度梯度)",
+                    "5. 校准在线浓度分析仪(使用标准溶液)",
+                    "6. 检查配料系统的计量泵精度是否在规定范围内",
+                ]),
+                ("**🟢 长期根治**", [
+                    "7. 建立原料品质追溯系统，浓度偏离立即溯源至供应商/批次",
+                ]),
             ],
         }
 
-        # 匹配模板
-        for key, templates in action_templates.items():
-            if key in variable or variable in key:
-                actions.extend(templates)
+        for key, steps in step_templates.items():
+            if key in variable:
+                for title, items in steps:
+                    actions.append(f"\n{title}")
+                    for item in items:
+                        actions.append(item)
                 break
-        else:
-            actions.append(f"处置上游根因节点: {variable}")
-            if len(top.path) > 1:
-                actions.append(f"因果路径: {' → '.join(top.path)}")
 
-        # 添加紧急停车条件提示
-        if anomaly.variable in ["Reactor_Temp"]:
+        # 反事实预期效果
+        if variable in self.normal_ranges and anomaly.variable in self.normal_ranges:
+            actions.append(f"\n**📊 预期效果**: "
+                          f"将{variable}恢复至正常值后，"
+                          f"{anomaly.variable}预期恢复到正常范围。"
+                          f"（具体改善量可使用反事实推理模块量化评估）")
+
+        # 紧急停车条件
+        danger_conditions = {
+            "Reactor_Temp": (1.15, "反应器温度超过正常上限15%，存在热失控风险"),
+            "Reactor_Press": (1.20, "反应器压力超过正常上限20%，存在超压破裂风险"),
+        }
+        if anomaly.variable in danger_conditions:
+            threshold_pct, msg = danger_conditions[anomaly.variable]
             hi = anomaly.normal_range[1]
-            if anomaly.observed_value > hi * 1.15:
-                actions.insert(0, "⚠⚠⚠ 反应器温度严重超标，建议立即紧急停车！")
+            if anomaly.observed_value > hi * threshold_pct:
+                actions.insert(0, f"⚠⚠⚠ **紧急**: {msg}。建议立即启动紧急停车程序！")
 
         return actions
 

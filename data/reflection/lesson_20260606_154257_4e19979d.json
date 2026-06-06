@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-06-06T15:42:57.423355",
+  "error_type": "wrong_ranking",
+  "what_happened": "真实根因'Pump_Current'在候选列表第4位, 但Agent选了'CW_Flow'",
+  "why_wrong": "评分函数权重不当: 因果效应/置信度/路径长度/偏离程度 的相对重要性需调整",
+  "extracted_rule": {
+    "action": "adjust_scoring_weights",
+    "variable": "Pump_Current",
+    "old_rank": 4,
+    "reason_for_low_score": "路径较长/置信度较低/偏离较小",
+    "suggested_fix": "当'Pump_Current'出现在路径中时, 提升其权重"
+  },
+  "confidence": 0.5,
+  "applied": false
+}
