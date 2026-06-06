@@ -135,7 +135,7 @@ def main():
 
     # ==== 模式选择 ====
     mode = st.sidebar.radio('📌 选择模式',
-        ['🎯 故障诊断', '🧪 场景模拟器', '📊 因果图浏览', '📚 知识库与进化', '🌐 文献爬虫'],
+        ['🎯 故障诊断', '🧪 场景模拟器', '📊 因果图浏览', '📚 知识库与进化', '🌐 文献爬虫', '🧬 自进化状态'],
         key='mode_selector')
 
     # ================================================================
@@ -621,6 +621,149 @@ def main():
                 with open(path, encoding='utf-8') as ff:
                     first_line = ff.readline().strip().lstrip('#').strip()
                 st.markdown(f'📄 **{f}** ({size}B) — {first_line[:80]}')
+
+
+    # ================================================================
+    # 模式6: 自进化状态 ⭐ 核心 — 回答"越用越准了吗？"
+    # ================================================================
+    elif mode == '🧬 自进化状态':
+        st.subheader('🧬 自主进化状态面板')
+
+        from src.evolution_db import EvolutionDB
+        db = EvolutionDB()
+
+        # 初始化演示数据
+        if st.button('🔄 初始化进化数据', key='init_evo_db'):
+            db.seed_demo_data()
+            st.success('进化演示数据已加载')
+            st.rerun()
+
+        status = db.get_status()
+
+        # 顶部状态卡片
+        st.markdown('### 📊 进化总览')
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            st.metric('🔄 进化周期', status['total_cycles'],
+                     delta='持续进化' if status['total_cycles'] > 0 else '待启动')
+        with c2:
+            st.metric('🧬 知识条目', status['total_knowledge'],
+                     delta=f'上次+{status["last_growth"]}' if status['last_growth'] else None)
+        with c3:
+            st.metric('⚙️ 参数变更', status['total_param_changes'],
+                     delta='自动校准')
+        with c4:
+            st.metric('✅ 自测评分', f'{status["avg_validation_score"]:.1%}' if status['avg_validation_score'] else 'N/A',
+                     delta='上升中' if status['avg_validation_score'] > 0.7 else '待提高')
+        with c5:
+            st.metric('📅 最近进化', status['last_evolution_time'][:16] if status['last_evolution_time'] else '暂无')
+
+        st.markdown('---')
+
+        # 知识增长曲线
+        st.subheader('📈 知识增长曲线')
+        growth = db.get_growth_curve()
+        if not growth.empty:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=growth['cycle'], y=growth['edges_after'],
+                         mode='lines+markers', name='因果边总数',
+                         line=dict(width=3, color='#10b981'),
+                         marker=dict(size=10)))
+            fig.add_trace(go.Bar(x=growth['cycle'], y=growth['new_causal_edges'],
+                         name='新增边', marker_color='#1a56db'))
+            fig.update_layout(
+                title='因果图知识增长轨迹',
+                xaxis_title='进化周期',
+                yaxis_title='因果边数量',
+                hovermode='x unified',
+                height=350,
+                plot_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info('暂无进化数据。点击上方按钮初始化演示数据。')
+
+        # 自测评分趋势
+        st.subheader('📉 自测验证趋势')
+        val_data = db.get_validation_trend()
+        if not val_data.empty:
+            val_fig = go.Figure()
+            val_fig.add_trace(go.Scatter(x=val_data['id'], y=val_data['score'],
+                             mode='lines+markers',
+                             line=dict(width=3, color='#8b5cf6'),
+                             marker=dict(size=10, color=val_data['passed'].apply(
+                                 lambda x: '#10b981' if x else '#ef4444')),
+                             name='验证评分'))
+            val_fig.add_hline(y=0.75, line_dash='dash', line_color='green',
+                            annotation_text='部署阈值(0.75)')
+            val_fig.update_layout(
+                title='自测验证评分变化',
+                xaxis_title='验证次数',
+                yaxis_title='评分',
+                yaxis_range=[0, 1],
+                height=300,
+                plot_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(val_fig, use_container_width=True)
+
+        c1, c2 = st.columns(2)
+
+        # 知识库内容
+        with c1:
+            st.subheader('🧠 知识库内容')
+            all_k = db.get_all_knowledge()
+            if not all_k.empty:
+                k_df = pd.DataFrame([{
+                    '原因': row['cause'], '结果': row['effect'],
+                    '机制': row['mechanism'][:30],
+                    '置信度': f'{row["confidence"]:.2f}',
+                    '来源': row['source'],
+                } for _, row in all_k.iterrows()])
+                st.dataframe(k_df, use_container_width=True, hide_index=True)
+            else:
+                st.info('知识库为空')
+
+        # 参数进化轨迹
+        with c2:
+            st.subheader('⚙️ 参数进化轨迹')
+            params = db.get_param_history()
+            if not params.empty:
+                p_df = pd.DataFrame([{
+                    '参数': row['param_name'][:25],
+                    '旧值': f'{row["old_value"]:.4f}',
+                    '新值': f'{row["new_value"]:.4f}',
+                    '变化': f'{row["new_value"] - row["old_value"]:+.4f}',
+                    '来源': row['trigger_source'],
+                } for _, row in params.iterrows()])
+                st.dataframe(p_df, use_container_width=True, hide_index=True)
+            else:
+                st.info('参数无变更记录')
+
+        # 进化流程说明
+        st.markdown('---')
+        st.subheader('🔄 自进化流程')
+        st.markdown('''
+        ```
+        ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+        │ ① 文献爬取│ → │ ② AI精读 │ → │ ③ 知识注入│ → │ ④ 参数校准│
+        │ 定时/手动 │    │ 因果提取 │    │ 去重融合 │    │ 数据回喂 │
+        └──────────┘    └──────────┘    └──────────┘    └─────┬────┘
+             ↑                                                ↓
+             │                                          ┌──────────┐
+             └────────── ⑥ 自测未通过 ──────────────── │ ⑤ 仿真验证│
+                        通过 → 部署更新 ✓               │ 文献自测 │
+                                                       └──────────┘
+        ```
+        ''')
+
+        st.info(
+            '💡 **当前限制**: Streamlit Cloud 不支持后台定时任务。'
+            '在真实部署环境中（Docker + 定时调度器），进化会自动周期性运行。'
+            '当前可按手动触发按钮体验进化流程。'
+        )
+
+        st.markdown('---')
+        st.caption(f'进化数据库: `{db.db_path}` | 累计 {status["total_cycles"]} 周期')
 
 
 if __name__ == '__main__':
