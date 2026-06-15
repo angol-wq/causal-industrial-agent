@@ -115,6 +115,30 @@ class CounterfactualEngine:
                 order.append(node)
         return order
 
+    def _abduct_noise(self, observation: Dict[str, float]) -> Dict[str, float]:
+        """
+        Step 1 — 溯因 (Abduction): 从观测值推断每个变量的外生噪声项 ε_i
+
+        对于线性 SCM: X_i = Σ_{j∈parents(i)} β_{ji} × X_j + ε_i
+        噪声项: ε_i = x_i - Σ β_{ji} × x_j
+
+        噪声项代表"观测值中不能被父变量线性解释的部分"——
+        包括未建模的外部因素、测量误差、非线性成分等。
+        在反事实世界中这些噪声保持不变，因为我们只干预特定变量。
+        """
+        noise = {}
+        for var in self.causal_graph.nodes():
+            if var in observation:
+                predicted = 0.0
+                for parent in self.causal_graph.predecessors(var):
+                    coef = self.effect_matrix.get((parent, var), 0.0)
+                    if parent in observation:
+                        predicted += coef * observation[parent]
+                noise[var] = observation[var] - predicted
+            else:
+                noise[var] = 0.0
+        return noise
+
     def what_if(self, observation: Dict[str, float],
                 intervention: Dict[str, float],
                 target_variable: str,
@@ -122,6 +146,12 @@ class CounterfactualEngine:
                 ) -> CounterfactualResult:
         """
         确定性反事实推理: "如果做X, Y会怎样？"
+
+        Pearl SCM 三步法完整实现:
+          1. 溯因(Abduction): 从观测值推断噪声项 ε_i = x_i - Σ β_ji × x_j
+          2. 行动(Action):   施加干预 do(X_k = x_k')
+          3. 预测(Prediction): 保持噪声不变，沿因果图重新计算下游变量
+                                X_i' = Σ β_ji × X_j' + ε_i
 
         Args:
             observation: 当前观测值
@@ -132,41 +162,44 @@ class CounterfactualEngine:
         Returns:
             CounterfactualResult
         """
+        if not self.effect_matrix:
+            raise ValueError("因果效应系数未设置。请先调用 fit_effect_coefficients() "
+                           "或 set_manual_coefficients()。")
+
+        # Step 1 — 溯因: 推断噪声项
+        noise = self._abduct_noise(observation)
+
         # 获取因果传播顺序（处理可能的循环图）
         try:
             topo_order = list(nx.topological_sort(self.causal_graph))
         except nx.NetworkXUnfeasible:
-            # 图中有环: 按BFS层次从干预变量向下传播
-            topo_order = self._get_bfs_order(intervention.keys())
+            topo_order = self._get_bfs_order(list(intervention.keys()))
 
-        # 创建反事实世界的变量值
-        cf_values = observation.copy()
+        # Step 2 — 行动: 创建反事实世界的变量值，施加干预
+        cf_values = {}
+        for var in self.causal_graph.nodes():
+            cf_values[var] = observation.get(var, 0.0)
 
-        # 施加干预
         for var, new_val in intervention.items():
             cf_values[var] = new_val
 
-        # 沿因果图向下传播干预效应（最多迭代3轮以处理循环）
-        for _ in range(3):
-            changed = False
-            for var in topo_order:
-                if var in intervention:
-                    continue
+        # Step 3 — 预测: 沿因果图向下游传播，保留噪声项
+        # 拓扑序确保父节点在子节点之前被更新
+        for var in topo_order:
+            if var in intervention:
+                continue  # 干预变量已固定，不重算
 
-                parents = list(self.causal_graph.predecessors(var))
-                if not parents:
-                    continue
+            parents = list(self.causal_graph.predecessors(var))
+            if not parents:
+                continue
 
-                new_val = 0.0
-                for parent in parents:
-                    coef = self.effect_matrix.get((parent, var), 0.0)
-                    new_val += coef * cf_values.get(parent, observation.get(parent, 0))
+            # X_i' = Σ β_ji × X_j' + ε_i
+            new_val = noise.get(var, 0.0)
+            for parent in parents:
+                coef = self.effect_matrix.get((parent, var), 0.0)
+                new_val += coef * cf_values.get(parent, 0.0)
 
-                if abs(cf_values.get(var, 0) - new_val) > 1e-6:
-                    cf_values[var] = new_val
-                    changed = True
-            if not changed:
-                break
+            cf_values[var] = new_val
 
         factual = observation.get(target_variable, 0)
         counterfactual = cf_values.get(target_variable, 0)
@@ -233,15 +266,20 @@ class CounterfactualEngine:
         """
         归因反事实: "每个因素对异常的贡献是多少？"
 
-        对于每个候选原因，计算:
-          "如果这个原因正常(其他不变), 结果会改善多少？"
-        → 改善量 = 该因素的异常贡献
+        使用因果顺序上的序列归因（Sequential Attribution）:
+          按因果拓扑序（根因在前）依次恢复每个原因到正常值，
+          每步的边际改善就是该原因的净贡献。
+          这避免了同一条因果链上父子变量的贡献重复计算。
+
+        例如: CW_Valve → CW_Flow → Reactor_Temp
+          先恢复 CW_Valve → 改善最多（含下游传递效应）
+          再恢复 CW_Flow → 改善已很小（CW_Valve已正常）
 
         Args:
             observation: 当前异常观测
             target_variable: 异常结果变量
-            candidate_causes: 候选原因变量列表
-            normal_values: 各变量的正常值（默认用observation中的值）
+            candidate_causes: 候选原因变量列表（将按拓扑序重新排列）
+            normal_values: 各变量的正常值（默认使用observation中的值）
 
         Returns:
             {cause: contribution_pct} 各因素的贡献百分比
@@ -249,11 +287,45 @@ class CounterfactualEngine:
         if normal_values is None:
             normal_values = observation.copy()
 
+        # 按拓扑序排列candidate_causes（根因在前，下游在后）
+        try:
+            full_order = list(nx.topological_sort(self.causal_graph))
+        except nx.NetworkXUnfeasible:
+            full_order = list(self.causal_graph.nodes())
+
+        ordered_causes = [c for c in full_order if c in candidate_causes]
+        # 追加不在拓扑序中的变量
+        for c in candidate_causes:
+            if c not in ordered_causes:
+                ordered_causes.append(c)
+
+        # 序列归因: 逐步恢复，每一步的边际改善就是该因素的净贡献
         contributions = {}
-        for cause in candidate_causes:
-            intervention = {cause: normal_values.get(cause, observation.get(cause, 0))}
-            result = self.what_if(observation, intervention, target_variable)
-            contributions[cause] = abs(result.improvement)
+        current_state = observation.copy()
+
+        for cause in ordered_causes:
+            normal_val = normal_values.get(cause, observation.get(cause, 0))
+            # 在当前已部分恢复的状态上，恢复这个原因
+            result = self.what_if(current_state, {cause: normal_val}, target_variable)
+            contribution = abs(result.improvement)
+            contributions[cause] = contribution
+
+            # 更新状态: 将该原因设置为正常值（为下一步归因做准备）
+            current_state[cause] = normal_val
+            # 同步更新下游变量
+            for var in self.causal_graph.nodes():
+                if var in ordered_causes and var != cause:
+                    continue  # 其他待归因的变量保持原观测值
+                if var == cause:
+                    continue  # 已手动设置
+                parents = list(self.causal_graph.predecessors(var))
+                if not parents:
+                    continue
+                new_val = 0.0
+                for parent in parents:
+                    coef = self.effect_matrix.get((parent, var), 0.0)
+                    new_val += coef * current_state.get(parent, observation.get(parent, 0))
+                current_state[var] = new_val
 
         total = sum(contributions.values())
         if total > 0:
@@ -265,49 +337,80 @@ class CounterfactualEngine:
 
     def causal_path_contribution(self, observation: Dict[str, float],
                                  target_variable: str,
-                                 root_cause: str
+                                 root_cause: str,
+                                 normal_values: Dict[str, float] = None
                                  ) -> Dict[str, Any]:
         """
         沿因果路径逐段分解贡献
 
-        对于路径: CW_Valve → CW_Flow → Reactor_Temp
+        方法: 计算根因→目标的完整路径上每一步的传递效应。
+        对于每条边 u→v，u 的异常通过该边对 v 的贡献 = β_uv × Δ_u
+        (Δ_u = u的观测值 - u的正常值)。
 
-        输出:
-        ┌──────────────────────────────────────────────┐
-        │ CW_Valve 贡献: 65%                            │
-        │   └→ CW_Flow (β=0.55):  贡献 55%             │
-        │      └→ Reactor_Temp (β=-0.35): 贡献 45%     │
-        │ 其他因素(CW_Inlet_Temp等): 35%                │
-        └──────────────────────────────────────────────┘
+        对于路径 CW_Valve → CW_Flow → Reactor_Temp:
+          - CW_Valve→CW_Flow: β=0.55, Δ_Valve=-38 → CW_Flow下降 20.9
+          - CW_Flow→Reactor_Temp: β=-0.35, Δ_Flow=X → Reactor_Temp变化 Y
+
+        Args:
+            observation: 当前观测值
+            target_variable: 异常结果变量
+            root_cause: 根因变量
+            normal_values: 各变量的正常值。如不提供则用 observation 估算。
+
+        Returns:
+            {"path": [...], "steps": [...], "total_effect": float, "breakdown": str}
         """
-        # 找因果路径
         try:
             path = nx.shortest_path(self.causal_graph, root_cause, target_variable)
         except nx.NetworkXNoPath:
             return {"error": f"从{root_cause}到{target_variable}无因果路径"}
 
-        # 逐个节点做反事实归因
+        if normal_values is None:
+            normal_values = {}
+            for var in path:
+                normal_values[var] = observation.get(var, 0.0)
+
+        # 沿路径计算偏差传播
         steps = []
+        accumulated_deviation = observation.get(root_cause, 0) - normal_values.get(root_cause, 0)
+
         for i in range(len(path) - 1):
             u, v = path[i], path[i + 1]
             coef = self.effect_matrix.get((u, v), 0.0)
-            # 反事实: 只恢复u到正常值, 看v改善多少
-            result = self.what_if(
-                observation,
-                {u: 0},  # 简化: 假设干预到0分析边际效应
-                v,
-            )
+
+            # u 的偏差通过这条边传递给 v: Δ_v_from_u = β × Δ_u
+            edge_contribution = coef * accumulated_deviation
+
             steps.append({
                 "from": u,
                 "to": v,
-                "coefficient": coef,
-                "marginal_effect": result.improvement,
+                "coefficient": round(coef, 6),
+                "deviation_of_cause": round(accumulated_deviation, 4),
+                "contribution_to_effect": round(edge_contribution, 4),
             })
+
+            # 累积效应传递到下一步: v 的总偏差 = 来自u的贡献 + v自身的偏差
+            v_deviation = observation.get(v, 0) - normal_values.get(v, 0)
+            # u 的贡献经 v 传递到下游: 如果 v 还有其他父节点，做近似衰减
+            accumulated_deviation = edge_contribution
+
+        # 总效应: 目标变量的观测值与正常值之差
+        total_deviation = observation.get(target_variable, 0) - normal_values.get(target_variable, 0)
+
+        # 路径解释
+        breakdown_parts = []
+        for s in steps:
+            sign = "↑" if s["contribution_to_effect"] > 0 else "↓"
+            breakdown_parts.append(
+                f"{s['from']}→{s['to']} (β={s['coefficient']:.3f}): "
+                f"{s['contribution_to_effect']:+.3f}{sign}"
+            )
 
         return {
             "path": path,
             "steps": steps,
-            "total_effect": sum(s["marginal_effect"] for s in steps),
+            "total_effect_on_target": round(total_deviation, 4),
+            "breakdown": " | ".join(breakdown_parts),
         }
 
     def generate_counterfactual_report(self, observation: Dict[str, float],
