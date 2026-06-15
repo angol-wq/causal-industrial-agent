@@ -172,13 +172,19 @@ class CausalAgentPipeline:
         # 转换knowledge_pairs为融合所需的格式
         kp_formatted = []
         for p in knowledge_pairs:
+            # time_lag 从 str 转换为 int
+            try:
+                t_lag = int(p.time_lag) if p.time_lag else 0
+            except (ValueError, TypeError):
+                t_lag = 0
+
             kp_formatted.append({
                 "cause": p.cause,
                 "effect": p.effect,
                 "confidence": p.confidence,
                 "mechanism": p.mechanism,
                 "evidence": p.evidence,
-                "time_lag": 0,
+                "time_lag": t_lag,
             })
 
         self.fused_graph = self.fusion.fuse(

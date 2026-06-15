@@ -96,6 +96,8 @@ class RootCauseAnalyzer:
     def detect_anomalies(self, observation: Dict[str, float]
                          ) -> List[AnomalyFinding]:
         """检测当前观测中的异常变量"""
+        if not hasattr(self, 'normal_ranges') or not self.normal_ranges:
+            raise ValueError("normal_ranges未设置。请先调用 set_normal_ranges() 或手动设置 self.normal_ranges。")
         anomalies = []
         for var, val in observation.items():
             if var in self.normal_ranges:

@@ -132,11 +132,17 @@ class CausalDiscovery:
                         target = var_names[i]
 
                         if not G.has_edge(source, target):
+                            # 提取该边的p-value: p_matrix[j, i, tau]
+                            p_val = None
+                            if "p_matrix" in self.pcmci_results:
+                                p_val = self.pcmci_results["p_matrix"][j, i, tau]
+                            significance = 1.0 - p_val if p_val is not None else 0.8
+
                             G.add_edge(
                                 source, target,
                                 lag=tau,
-                                p_value=self.pcmci_results.get("p_matrix", None),
-                                val_matrix=self.pcmci_results.get("val_matrix", None),
+                                p_value=p_val,
+                                significance=round(significance, 4),
                             )
 
         return G
